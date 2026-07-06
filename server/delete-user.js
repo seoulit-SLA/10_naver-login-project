@@ -1,9 +1,9 @@
 const { getConnection } = require('./db');
 
-const sub = process.argv[2];
+const uid = process.argv[2];
 
-if (!sub) {
-  console.error('sub를 입력하세요');
+if (!uid) {
+  console.error('uid를 입력하세요');
   process.exit(1);
 }
 
@@ -11,7 +11,7 @@ async function deleteUser() {
   let conn;
   try {
     conn = await getConnection();
-    const [result] = await conn.query('DELETE FROM users WHERE sub = ?', [sub]);
+    const [result] = await conn.query('DELETE FROM users WHERE uid = ?', [uid]);
 
     if (result.affectedRows > 0) {
       console.log('삭제 성공');

@@ -1,17 +1,16 @@
+const fs = require('fs');
+const path = require('path');
 const { getConnection } = require('./db');
 
 async function createUsersTable() {
   let conn;
   try {
     conn = await getConnection();
-    await conn.query(`
-      CREATE TABLE IF NOT EXISTS users (
-        sub VARCHAR(30) PRIMARY KEY,
-        email VARCHAR(255) NOT NULL,
-        name VARCHAR(100) NOT NULL,
-        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-      ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
-    `);
+    const migrationSql = fs.readFileSync(
+      path.join(__dirname, 'migrations', '001_users.sql'),
+      'utf8'
+    );
+    await conn.query(migrationSql);
 
     const [columns] = await conn.query(
       `
@@ -19,18 +18,20 @@ async function createUsersTable() {
       FROM INFORMATION_SCHEMA.COLUMNS
       WHERE TABLE_SCHEMA = DATABASE()
         AND TABLE_NAME = 'users'
-        AND COLUMN_NAME = 'created_at'
       `
     );
+    const columnNames = columns.map((column) => column.COLUMN_NAME);
 
-    if (columns.length === 0) {
+    if (columnNames.includes('sub') && !columnNames.includes('uid')) {
       await conn.query(`
         ALTER TABLE users
-        ADD COLUMN created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+          CHANGE COLUMN sub uid VARCHAR(64) NOT NULL,
+          ADD UNIQUE KEY uq_users_uid (uid)
       `);
+      console.log('기존 sub 컬럼을 uid로 변경했습니다.');
     }
 
-    console.log('테이블 생성 성공');
+    console.log('users 테이블 생성/마이그레이션 성공');
   } catch (error) {
     console.error('테이블 생성 실패:', error.message);
     process.exitCode = 1;

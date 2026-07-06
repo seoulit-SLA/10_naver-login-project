@@ -1,7 +1,7 @@
 const { getConnection } = require('./db');
 
 const user = {
-  sub: '123456789012345678901',
+  uid: '123456789012345678901',
   email: 'hong@gmail.com',
   name: '홍길동',
 };
@@ -12,13 +12,13 @@ async function insertUser() {
     conn = await getConnection();
     await conn.query(
       `
-      INSERT INTO users (sub, email, name)
+      INSERT INTO users (uid, email, name)
       VALUES (?, ?, ?)
       ON DUPLICATE KEY UPDATE
         email = VALUES(email),
         name = VALUES(name)
       `,
-      [user.sub, user.email, user.name]
+      [user.uid, user.email, user.name]
     );
     console.log('적재 성공');
   } catch (error) {
