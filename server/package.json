@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node app.js",
     "create:database": "node create-database.js",
+    "reset:database": "node reset-database.js",
     "create:users-table": "node create-users-table.js",
     "delete:user": "node delete-user.js",
     "insert:user": "node insert-user.js",
