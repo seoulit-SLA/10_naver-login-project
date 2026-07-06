@@ -1,0 +1,26 @@
+{
+  "name": "my-express-server4",
+  "version": "1.0.0",
+  "description": "",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js",
+    "create:users-table": "node create-users-table.js",
+    "delete:user": "node delete-user.js",
+    "insert:user": "node insert-user.js",
+    "test:db": "node test-db.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "express-session": "^1.19.0",
+    "mysql2": "^3.22.5",
+    "passport": "^0.7.0",
+    "passport-naver-v2": "^2.0.8"
+  }
+}
