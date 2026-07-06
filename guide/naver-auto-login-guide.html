@@ -1,0 +1,1110 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Naver OAuth 자동 로그인 아키텍처 가이드</title>
+  <style>
+    :root {
+      --bg: #0a0a0b;
+      --bg-elevated: #111113;
+      --bg-subtle: #18181b;
+      --bg-hover: #1f1f23;
+      --border: rgba(255, 255, 255, 0.08);
+      --border-strong: rgba(255, 255, 255, 0.12);
+      --text: #ededed;
+      --text-secondary: #a1a1aa;
+      --text-muted: #71717a;
+      --accent: #5e6ad2;
+      --accent-hover: #6872d9;
+      --accent-subtle: rgba(94, 106, 210, 0.12);
+      --success: #3dd68c;
+      --warning: #f5a623;
+      --danger: #e5484d;
+      --code-bg: #141416;
+      --radius: 8px;
+      --radius-lg: 12px;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.25);
+      --font: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --mono: "JetBrains Mono", "SF Mono", "Fira Code", Consolas, monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.65;
+      font-size: 15px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 260px 1fr;
+      min-height: 100vh;
+    }
+
+    /* Sidebar */
+    .sidebar {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+      border-right: 1px solid var(--border);
+      background: var(--bg-elevated);
+      padding: 24px 16px;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 0 8px 24px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 20px;
+    }
+
+    .logo-icon {
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      background: linear-gradient(135deg, var(--accent), #8b5cf6);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .logo-text {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      letter-spacing: -0.01em;
+    }
+
+    .logo-sub {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-weight: 400;
+    }
+
+    .nav-group {
+      margin-bottom: 20px;
+    }
+
+    .nav-label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-muted);
+      padding: 0 8px;
+      margin-bottom: 8px;
+    }
+
+    .nav-link {
+      display: block;
+      padding: 6px 8px;
+      border-radius: 6px;
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-size: 13px;
+      transition: background 0.15s, color 0.15s;
+    }
+
+    .nav-link:hover {
+      background: var(--bg-hover);
+      color: var(--text);
+    }
+
+    .nav-link.active {
+      background: var(--accent-subtle);
+      color: var(--accent-hover);
+    }
+
+    /* Main */
+    .main {
+      max-width: 860px;
+      padding: 48px 56px 96px;
+    }
+
+    .hero {
+      margin-bottom: 48px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: var(--accent-subtle);
+      border: 1px solid rgba(94, 106, 210, 0.25);
+      color: var(--accent-hover);
+      font-size: 12px;
+      font-weight: 500;
+      margin-bottom: 16px;
+    }
+
+    .badge-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent);
+    }
+
+    h1 {
+      font-size: 32px;
+      font-weight: 600;
+      letter-spacing: -0.03em;
+      line-height: 1.2;
+      margin-bottom: 12px;
+    }
+
+    .hero-desc {
+      font-size: 16px;
+      color: var(--text-secondary);
+      max-width: 640px;
+    }
+
+    section {
+      margin-bottom: 56px;
+      scroll-margin-top: 24px;
+    }
+
+    h2 {
+      font-size: 20px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    h3 {
+      font-size: 15px;
+      font-weight: 600;
+      margin: 24px 0 10px;
+      color: var(--text);
+    }
+
+    p { margin-bottom: 12px; color: var(--text-secondary); }
+    p strong { color: var(--text); font-weight: 500; }
+
+    ul, ol {
+      margin: 0 0 16px 20px;
+      color: var(--text-secondary);
+    }
+
+    li { margin-bottom: 6px; }
+
+    /* Cards */
+    .card {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 20px 24px;
+      margin-bottom: 16px;
+    }
+
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .card-sm {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+    }
+
+    .card-sm h4 {
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 6px;
+      color: var(--text);
+    }
+
+    .card-sm p {
+      font-size: 13px;
+      margin: 0;
+      color: var(--text-muted);
+    }
+
+    .card-label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+
+    /* Table */
+    .table-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      margin-bottom: 16px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    th {
+      text-align: left;
+      padding: 10px 16px;
+      background: var(--bg-subtle);
+      color: var(--text-muted);
+      font-weight: 500;
+      font-size: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    td {
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text-secondary);
+      vertical-align: top;
+    }
+
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(255,255,255,0.02); }
+
+    /* Code */
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 16px 20px;
+      overflow-x: auto;
+      margin-bottom: 16px;
+      font-family: var(--mono);
+      font-size: 12.5px;
+      line-height: 1.6;
+      color: #c4c4cc;
+    }
+
+    code {
+      font-family: var(--mono);
+      font-size: 0.88em;
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 1px 6px;
+      color: #d4d4d8;
+    }
+
+    pre code {
+      background: none;
+      border: none;
+      padding: 0;
+      font-size: inherit;
+    }
+
+    .comment { color: #6b7280; }
+    .keyword { color: #c084fc; }
+    .string { color: #86efac; }
+    .type { color: #67e8f9; }
+    .fn { color: #fcd34d; }
+
+    /* Flow diagram */
+    .flow {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      margin-bottom: 16px;
+    }
+
+    .flow-step {
+      display: flex;
+      gap: 16px;
+      align-items: flex-start;
+    }
+
+    .flow-line {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: 32px;
+      flex-shrink: 0;
+    }
+
+    .flow-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--accent);
+      border: 2px solid var(--bg-elevated);
+      box-shadow: 0 0 0 2px var(--accent);
+      flex-shrink: 0;
+      margin-top: 5px;
+    }
+
+    .flow-connector {
+      width: 2px;
+      flex: 1;
+      min-height: 24px;
+      background: var(--border-strong);
+    }
+
+    .flow-content {
+      flex: 1;
+      padding-bottom: 20px;
+    }
+
+    .flow-title {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+
+    .flow-desc {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    /* Tags */
+    .tag {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 500;
+      margin-right: 4px;
+    }
+
+    .tag-get { background: rgba(61, 214, 140, 0.12); color: var(--success); }
+    .tag-post { background: rgba(94, 106, 210, 0.15); color: var(--accent-hover); }
+    .tag-danger { background: rgba(229, 72, 77, 0.12); color: var(--danger); }
+    .tag-warn { background: rgba(245, 166, 35, 0.12); color: var(--warning); }
+
+    /* Callout */
+    .callout {
+      display: flex;
+      gap: 12px;
+      padding: 14px 16px;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      background: var(--bg-subtle);
+      margin-bottom: 16px;
+      font-size: 13px;
+    }
+
+    .callout-icon { flex-shrink: 0; font-size: 16px; }
+    .callout-body { color: var(--text-secondary); }
+    .callout-body strong { color: var(--text); }
+
+    .callout.warn {
+      border-color: rgba(245, 166, 35, 0.25);
+      background: rgba(245, 166, 35, 0.06);
+    }
+
+    .callout.danger {
+      border-color: rgba(229, 72, 77, 0.25);
+      background: rgba(229, 72, 77, 0.06);
+    }
+
+    .callout.success {
+      border-color: rgba(61, 214, 140, 0.25);
+      background: rgba(61, 214, 140, 0.06);
+    }
+
+    /* Checklist */
+    .checklist {
+      list-style: none;
+      margin-left: 0;
+    }
+
+    .checklist li {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 13px;
+    }
+
+    .checklist li:last-child { border-bottom: none; }
+
+    .check-box {
+      width: 16px;
+      height: 16px;
+      border: 1.5px solid var(--border-strong);
+      border-radius: 4px;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    /* Sequence */
+    .sequence {
+      font-family: var(--mono);
+      font-size: 12px;
+      line-height: 1.8;
+      color: var(--text-muted);
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 20px 24px;
+      overflow-x: auto;
+      margin-bottom: 16px;
+    }
+
+    .sequence .actor { color: var(--accent-hover); }
+    .sequence .action { color: var(--text-secondary); }
+    .sequence .note { color: #6b7280; font-style: italic; }
+
+    /* Footer */
+    .footer {
+      margin-top: 64px;
+      padding-top: 24px;
+      border-top: 1px solid var(--border);
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; }
+      .sidebar {
+        position: relative;
+        height: auto;
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+      }
+      .main { padding: 32px 24px 64px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="logo">
+        <div class="logo-icon">N</div>
+        <div>
+          <div class="logo-text">Naver OAuth Guide</div>
+          <div class="logo-sub">Auto Login Architecture</div>
+        </div>
+      </div>
+
+      <nav>
+        <div class="nav-group">
+          <div class="nav-label">Overview</div>
+          <a class="nav-link" href="#overview">개요</a>
+          <a class="nav-link" href="#principles">설계 원칙</a>
+          <a class="nav-link" href="#token-roles">토큰 역할</a>
+        </div>
+        <div class="nav-group">
+          <div class="nav-label">Architecture</div>
+          <a class="nav-link" href="#flow-first">첫 로그인 흐름</a>
+          <a class="nav-link" href="#flow-auto">자동 로그인 흐름</a>
+          <a class="nav-link" href="#flow-refresh">토큰 갱신 흐름</a>
+          <a class="nav-link" href="#flow-reauth">재인증 흐름</a>
+        </div>
+        <div class="nav-group">
+          <div class="nav-label">Implementation</div>
+          <a class="nav-link" href="#db-schema">DB 스키마</a>
+          <a class="nav-link" href="#api">API 명세</a>
+          <a class="nav-link" href="#server">서버 구현</a>
+          <a class="nav-link" href="#client">클라이언트 구현</a>
+        </div>
+        <div class="nav-group">
+          <div class="nav-label">Reference</div>
+          <a class="nav-link" href="#security">보안 가이드</a>
+          <a class="nav-link" href="#env">환경 변수</a>
+          <a class="nav-link" href="#checklist">구현 체크리스트</a>
+          <a class="nav-link" href="#errors">에러 처리</a>
+        </div>
+      </nav>
+    </aside>
+
+    <main class="main">
+      <header class="hero">
+        <div class="badge"><span class="badge-dot"></span>Reusable Architecture Doc</div>
+        <h1>Naver OAuth 자동 로그인<br>아키텍처 가이드</h1>
+        <p class="hero-desc">
+          첫 로그인에서만 Naver OAuth를 수행하고, 이후에는 자체 세션 토큰으로 자동 로그인하는 패턴입니다.
+          Unity · Electron · 모바일 등 데스크톱/게임 클라이언트 프로젝트에 재사용할 수 있습니다.
+        </p>
+      </header>
+
+      <!-- Overview -->
+      <section id="overview">
+        <h2>개요</h2>
+        <p>
+          브라우저 기반 OAuth는 최초 1회만 실행합니다. 서버는 Naver로부터 받은
+          <code>accessToken</code>과 <code>refreshToken</code>을 DB에 암호화 저장하고,
+          클라이언트에는 자체 발급 <code>sessionToken</code>만 전달합니다.
+        </p>
+
+        <div class="card-grid">
+          <div class="card-sm">
+            <h4>첫 로그인</h4>
+            <p>브라우저 → Naver OAuth → 서버 토큰 저장 → sessionToken 발급</p>
+          </div>
+          <div class="card-sm">
+            <h4>이후 로그인</h4>
+            <p>클라이언트 sessionToken → 서버 검증 → OAuth 없이 진입</p>
+          </div>
+          <div class="card-sm">
+            <h4>토큰 만료</h4>
+            <p>refreshToken으로 갱신, 실패 시 OAuth 재실행</p>
+          </div>
+        </div>
+
+        <div class="callout success">
+          <div class="callout-icon">✓</div>
+          <div class="callout-body">
+            <strong>적용 대상:</strong> Unity, Unreal, Electron, Tauri 등 로컬 HTTP 콜백(<code>127.0.0.1</code>)을 사용하는 데스크톱/게임 클라이언트
+          </div>
+        </div>
+      </section>
+
+      <!-- Principles -->
+      <section id="principles">
+        <h2>설계 원칙</h2>
+
+        <div class="flow">
+          <div class="flow-step">
+            <div class="flow-line"><div class="flow-dot"></div><div class="flow-connector"></div></div>
+            <div class="flow-content">
+              <div class="flow-title">Naver 토큰은 서버 전용</div>
+              <div class="flow-desc">refreshToken을 클라이언트(앱)에 저장하지 않습니다. PlayerPrefs, localStorage 등은 쉽게 노출됩니다.</div>
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="flow-line"><div class="flow-dot"></div><div class="flow-connector"></div></div>
+            <div class="flow-content">
+              <div class="flow-title">자동 로그인은 자체 sessionToken</div>
+              <div class="flow-desc">Naver 토큰은 "Naver API 호출 권한"이고, 앱 세션과는 목적이 다릅니다. JWT 등 서버 발급 토큰으로 인증합니다.</div>
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="flow-line"><div class="flow-dot"></div><div class="flow-connector"></div></div>
+            <div class="flow-content">
+              <div class="flow-title">OAuth는 예외 상황에서만</div>
+              <div class="flow-desc">최초 로그인, refreshToken 만료/폐기, 사용자 연동 해제, sessionToken 무효화 시에만 브라우저 OAuth를 다시 엽니다.</div>
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="flow-line"><div class="flow-dot"></div></div>
+            <div class="flow-content">
+              <div class="flow-title">Graceful Degradation</div>
+              <div class="flow-desc">자동 로그인 실패 시 사용자에게 재로그인 버튼을 제공하고, OAuth 플로우로 자연스럽게 폴백합니다.</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Token Roles -->
+      <section id="token-roles">
+        <h2>토큰 역할 분리</h2>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>토큰</th>
+                <th>저장 위치</th>
+                <th>용도</th>
+                <th>수명</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>naver_access_token</code></td>
+                <td>서버 DB (암호화)</td>
+                <td>Naver Open API 호출</td>
+                <td>약 1시간 (Naver 정책)</td>
+              </tr>
+              <tr>
+                <td><code>naver_refresh_token</code></td>
+                <td>서버 DB (암호화)</td>
+                <td>accessToken 갱신</td>
+                <td>장기 (만료/폐기 가능)</td>
+              </tr>
+              <tr>
+                <td><code>sessionToken</code></td>
+                <td>클라이언트 로컬</td>
+                <td>앱 자동 로그인 인증</td>
+                <td>서버 설정 (예: 30일)</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout warn">
+          <div class="callout-icon">⚠</div>
+          <div class="callout-body">
+            <strong>주의:</strong> Naver refreshToken도 영구적이지 않습니다. 사용자가 앱 연동을 해제하거나 Naver 정책 변경 시 재OAuth가 필요합니다.
+          </div>
+        </div>
+      </section>
+
+      <!-- First Login Flow -->
+      <section id="flow-first">
+        <h2>첫 로그인 흐름</h2>
+
+        <div class="sequence">
+<span class="note">── 첫 로그인 (OAuth) ──</span>
+
+<span class="actor">Client</span>  <span class="action">→ GET /auth/naver (브라우저 열기)</span>
+<span class="actor">Browser</span> <span class="action">→ Naver 로그인 페이지</span>
+<span class="actor">Naver</span>   <span class="action">→ GET /auth/naver/callback?code=...</span>
+<span class="actor">Server</span>  <span class="action">→ Naver token endpoint (code → accessToken, refreshToken)</span>
+<span class="actor">Server</span>  <span class="action">→ Naver profile API (uid, email, name)</span>
+<span class="actor">Server</span>  <span class="action">→ DB upsert (profile + encrypted tokens)</span>
+<span class="actor">Server</span>  <span class="action">→ JWT sessionToken 발급</span>
+<span class="actor">Server</span>  <span class="action">→ Redirect http://127.0.0.1:{port}/callback?token={sessionToken}</span>
+<span class="actor">Client</span>  <span class="action">→ HttpListener로 token 수신 → 로컬 저장</span>
+        </div>
+
+        <h3>Unity 콜백 URL 예시</h3>
+        <pre><code><span class="comment">// 클라이언트가 수신 대기하는 prefix</span>
+http://127.0.0.1:7777/naver-login/
+
+<span class="comment">// OAuth 성공 후 서버가 리다이렉트하는 URL</span>
+http://127.0.0.1:7777/naver-login/?token=eyJhbGciOiJIUzI1NiIs...</code></pre>
+      </section>
+
+      <!-- Auto Login Flow -->
+      <section id="flow-auto">
+        <h2>자동 로그인 흐름</h2>
+
+        <div class="sequence">
+<span class="note">── 앱 시작 / 재실행 ──</span>
+
+<span class="actor">Client</span>  <span class="action">→ 로컬 sessionToken 존재 여부 확인</span>
+<span class="actor">Client</span>  <span class="action">→ POST /auth/me  Authorization: Bearer {sessionToken}</span>
+<span class="actor">Server</span>  <span class="action">→ JWT 검증 → uid 조회 → 사용자 정보 반환</span>
+<span class="actor">Client</span>  <span class="action">→ 로그인 완료, 메인 화면 진입 (OAuth 없음)</span>
+        </div>
+
+        <div class="callout success">
+          <div class="callout-icon">✓</div>
+          <div class="callout-body">
+            이 경로가 <strong>일반적인 재로그인</strong>입니다. 사용자는 브라우저를 열 필요가 없습니다.
+          </div>
+        </div>
+      </section>
+
+      <!-- Refresh Flow -->
+      <section id="flow-refresh">
+        <h2>토큰 갱신 흐름</h2>
+
+        <div class="sequence">
+<span class="note">── sessionToken 만료 또는 /auth/me 401 ──</span>
+
+<span class="actor">Client</span>  <span class="action">→ POST /auth/refresh  Authorization: Bearer {sessionToken}</span>
+<span class="actor">Server</span>  <span class="action">→ DB에서 naver_refresh_token 조회 (복호화)</span>
+<span class="actor">Server</span>  <span class="action">→ Naver token refresh API 호출</span>
+<span class="actor">Server</span>  <span class="action">→ 새 accessToken/refreshToken DB 저장</span>
+<span class="actor">Server</span>  <span class="action">→ 새 sessionToken 발급 → 클라이언트에 반환</span>
+<span class="actor">Client</span>  <span class="action">→ sessionToken 교체 저장</span>
+        </div>
+      </section>
+
+      <!-- Re-auth Flow -->
+      <section id="flow-reauth">
+        <h2>재인증 흐름 (OAuth 재실행)</h2>
+
+        <p>다음 상황에서는 자동 갱신이 불가능하므로 OAuth를 다시 실행합니다.</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>상황</th>
+                <th>서버 응답</th>
+                <th>클라이언트 동작</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>로컬 sessionToken 없음</td>
+                <td>—</td>
+                <td>로그인 버튼 → OAuth</td>
+              </tr>
+              <tr>
+                <td>sessionToken 만료 + refresh 실패</td>
+                <td><code>401</code> + <code>code: REAUTH_REQUIRED</code></td>
+                <td>로컬 토큰 삭제 → OAuth</td>
+              </tr>
+              <tr>
+                <td>Naver refreshToken 폐기</td>
+                <td><code>401</code> + <code>code: NAVER_TOKEN_REVOKED</code></td>
+                <td>로컬 토큰 삭제 → OAuth</td>
+              </tr>
+              <tr>
+                <td>사용자 로그아웃</td>
+                <td><code>200</code></td>
+                <td>로컬 토큰 삭제 → 로그인 화면</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- DB Schema -->
+      <section id="db-schema">
+        <h2>DB 스키마</h2>
+
+        <pre><code><span class="keyword">CREATE TABLE</span> users (
+  id                    <span class="type">INT</span>          <span class="keyword">NOT NULL AUTO_INCREMENT</span>,
+  uid                   <span class="type">VARCHAR(64)</span>  <span class="keyword">NOT NULL</span>,          <span class="comment">-- Naver profile id</span>
+  email                 <span class="type">VARCHAR(255)</span> <span class="keyword">NOT NULL</span>,
+  name                  <span class="type">VARCHAR(100)</span> <span class="keyword">NOT NULL</span>,
+  naver_access_token    <span class="type">TEXT</span>,                              <span class="comment">-- AES 암호화</span>
+  naver_refresh_token   <span class="type">TEXT</span>,                              <span class="comment">-- AES 암호화</span>
+  token_expires_at      <span class="type">DATETIME</span>,                            <span class="comment">-- accessToken 만료 시각</span>
+  created_at            <span class="type">TIMESTAMP</span>    <span class="keyword">NOT NULL DEFAULT CURRENT_TIMESTAMP</span>,
+  updated_at            <span class="type">TIMESTAMP</span>    <span class="keyword">NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP</span>,
+  <span class="keyword">PRIMARY KEY</span> (id),
+  <span class="keyword">UNIQUE KEY</span> uq_users_uid (uid)
+) <span class="keyword">ENGINE</span>=InnoDB <span class="keyword">DEFAULT CHARSET</span>=utf8mb4;</code></pre>
+
+        <h3>JWT sessionToken 페이로드 (예시)</h3>
+        <pre><code>{
+  <span class="string">"sub"</span>: <span class="string">"naver_uid_12345"</span>,     <span class="comment">// users.uid</span>
+  <span class="string">"iat"</span>: 1710000000,
+  <span class="string">"exp"</span>: 1712592000              <span class="comment">// 30일 등 서버 정책</span>
+}</code></pre>
+      </section>
+
+      <!-- API -->
+      <section id="api">
+        <h2>API 명세</h2>
+
+        <div class="card">
+          <div class="card-label">OAuth</div>
+          <p><span class="tag tag-get">GET</span> <code>/auth/naver</code> — Naver OAuth 시작 (브라우저 리다이렉트)</p>
+          <p style="margin-top:8px"><span class="tag tag-get">GET</span> <code>/auth/naver/callback</code> — OAuth 콜백, DB 저장 후 클라이언트 콜백 URL로 리다이렉트</p>
+        </div>
+
+        <div class="card">
+          <div class="card-label">Session</div>
+          <p><span class="tag tag-post">POST</span> <code>/auth/me</code> — sessionToken 검증, 사용자 정보 반환</p>
+          <p style="margin-top:8px"><span class="tag tag-post">POST</span> <code>/auth/refresh</code> — sessionToken + Naver refreshToken 갱신</p>
+          <p style="margin-top:8px"><span class="tag tag-post">POST</span> <code>/auth/logout</code> — 세션 무효화 (선택: JWT blacklist)</p>
+        </div>
+
+        <h3>POST /auth/me</h3>
+        <pre><code><span class="comment">// Request</span>
+Authorization: Bearer eyJhbGciOiJIUzI1NiIs...
+
+<span class="comment">// Response 200</span>
+{
+  <span class="string">"uid"</span>: <span class="string">"12345678"</span>,
+  <span class="string">"email"</span>: <span class="string">"user@example.com"</span>,
+  <span class="string">"name"</span>: <span class="string">"홍길동"</span>
+}
+
+<span class="comment">// Response 401</span>
+{
+  <span class="string">"message"</span>: <span class="string">"세션이 만료되었습니다."</span>,
+  <span class="string">"code"</span>: <span class="string">"SESSION_EXPIRED"</span>
+}</code></pre>
+
+        <h3>OAuth 콜백 → 클라이언트 리다이렉트</h3>
+        <pre><code><span class="comment">// 성공</span>
+<span class="fn">res.redirect</span>(<span class="string">`http://127.0.0.1:7777/naver-login/?token=${sessionToken}`</span>);
+
+<span class="comment">// 실패</span>
+<span class="fn">res.redirect</span>(<span class="string">`http://127.0.0.1:7777/naver-login/?error=auth_failed`</span>);</code></pre>
+      </section>
+
+      <!-- Server -->
+      <section id="server">
+        <h2>서버 구현 가이드</h2>
+
+        <h3>권장 디렉터리 구조</h3>
+        <pre><code>server/
+├── app.js                 <span class="comment"># Express 진입점</span>
+├── db.js                  <span class="comment"># DB 연결</span>
+├── routes/
+│   └── auth.js            <span class="comment"># /auth/* 라우트</span>
+├── services/
+│   ├── naverAuth.js       <span class="comment"># Naver token refresh, profile</span>
+│   ├── session.js         <span class="comment"># JWT 발급/검증</span>
+│   └── crypto.js          <span class="comment"># 토큰 암호화/복호화</span>
+├── migrations/
+│   └── 001_users.sql
+└── .env.example</code></pre>
+
+        <h3>OAuth 콜백 핵심 로직</h3>
+        <pre><code>passport.use(<span class="keyword">new</span> <span class="type">NaverStrategy</span>(config, <span class="keyword">async</span> (accessToken, refreshToken, profile, done) => {
+  <span class="keyword">const</span> user = {
+    uid: profile.id,
+    email: profile.email,
+    name: profile.name || profile.nickname,
+  };
+
+  <span class="comment">// 1. DB upsert (tokens encrypted)</span>
+  <span class="keyword">await</span> <span class="fn">upsertUser</span>(user, accessToken, refreshToken);
+
+  <span class="comment">// 2. Issue session JWT</span>
+  <span class="keyword">const</span> sessionToken = <span class="fn">signSessionToken</span>(user.uid);
+
+  <span class="keyword">return</span> <span class="fn">done</span>(<span class="keyword">null</span>, { ...user, sessionToken });
+}));</code></pre>
+      </section>
+
+      <!-- Client -->
+      <section id="client">
+        <h2>클라이언트 구현 가이드</h2>
+
+        <h3>앱 시작 시 의사결정 트리</h3>
+        <pre><code><span class="fn">OnAppStart</span>()
+│
+├─ sessionToken = <span class="fn">LoadFromLocal</span>()
+│
+├─ sessionToken == null
+│   └─ <span class="fn">ShowLoginButton</span>()  → 클릭 시 OAuth
+│
+└─ sessionToken != null
+    └─ response = <span class="fn">POST</span> /auth/me
+        ├─ 200 → <span class="fn">EnterMainScreen</span>()
+        ├─ 401 SESSION_EXPIRED → <span class="fn">TryRefresh</span>()
+        │   ├─ success → <span class="fn">SaveToken</span> → <span class="fn">EnterMainScreen</span>()
+        │   └─ fail → <span class="fn">ClearToken</span> → <span class="fn">ShowLoginButton</span>()
+        └─ 401 REAUTH_REQUIRED → <span class="fn">ClearToken</span> → <span class="fn">ShowLoginButton</span>()</code></pre>
+
+        <h3>Unity HttpListener 콜백 처리</h3>
+        <pre><code><span class="keyword">private void</span> <span class="fn">HandleCallback</span>(HttpListenerRequest request)
+{
+    <span class="keyword">var</span> query = HttpUtility.ParseQueryString(request.Url.Query);
+    <span class="keyword">var</span> token = query[<span class="string">"token"</span>];
+    <span class="keyword">var</span> error = query[<span class="string">"error"</span>];
+
+    <span class="keyword">if</span> (!<span class="keyword">string</span>.IsNullOrEmpty(token))
+    {
+        PlayerPrefs.SetString(<span class="string">"sessionToken"</span>, token);
+        PlayerPrefs.Save();
+        <span class="fn">EnterMainScreen</span>();
+    }
+    <span class="keyword">else</span>
+    {
+        Debug.LogError(<span class="string">$"Login failed: {error}"</span>);
+    }
+}</code></pre>
+
+        <div class="callout">
+          <div class="callout-icon">ℹ</div>
+          <div class="callout-body">
+            프로덕션에서는 <code>PlayerPrefs</code> 대신 OS Keychain(Windows Credential Manager, macOS Keychain) 또는 암호화된 로컬 저장소 사용을 권장합니다.
+          </div>
+        </div>
+      </section>
+
+      <!-- Security -->
+      <section id="security">
+        <h2>보안 가이드</h2>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>항목</th>
+                <th>권장</th>
+                <th>비권장</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Naver refreshToken</td>
+                <td>서버 DB AES 암호화</td>
+                <td>클라이언트 저장, 평문 DB</td>
+              </tr>
+              <tr>
+                <td>sessionToken</td>
+                <td>JWT (HS256/RS256), 짧은 TTL + refresh</td>
+                <td>uid만 base64 인코딩</td>
+              </tr>
+              <tr>
+                <td>통신</td>
+                <td>HTTPS (프로덕션)</td>
+                <td>HTTP (로컬 개발만)</td>
+              </tr>
+              <tr>
+                <td>콜백 URL</td>
+                <td><code>127.0.0.1</code> 고정 포트</td>
+                <td>임의 포트, 외부 URL</td>
+              </tr>
+              <tr>
+                <td>로그아웃</td>
+                <td>클라이언트 토큰 삭제 + 서버 blacklist</td>
+                <td>클라이언트만 삭제</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout danger">
+          <div class="callout-icon">✕</div>
+          <div class="callout-body">
+            <strong>절대 금지:</strong> <code>.env</code>의 Naver Client Secret, DB refreshToken, JWT Secret을 Git에 커밋하거나 클라이언트 번들에 포함하지 마세요.
+          </div>
+        </div>
+      </section>
+
+      <!-- Env -->
+      <section id="env">
+        <h2>환경 변수</h2>
+
+        <pre><code><span class="comment"># Naver OAuth</span>
+NAVER_CLIENT_ID=your_client_id
+NAVER_CLIENT_SECRET=your_client_secret
+NAVER_CALLBACK_URL=http://127.0.0.1:3000/auth/naver/callback
+
+<span class="comment"># Session</span>
+JWT_SECRET=your-random-secret-min-32-chars
+JWT_EXPIRES_IN=30d
+
+<span class="comment"># Token encryption (AES-256)</span>
+TOKEN_ENCRYPTION_KEY=your-32-byte-hex-key
+
+<span class="comment"># Client callback (OAuth success redirect)</span>
+CLIENT_CALLBACK_URL=http://127.0.0.1:7777/naver-login/
+
+<span class="comment"># Database</span>
+DB_HOST=localhost
+DB_PORT=3306
+DB_USER=root
+DB_PASSWORD=
+DB_NAME=gamedb</code></pre>
+      </section>
+
+      <!-- Checklist -->
+      <section id="checklist">
+        <h2>구현 체크리스트</h2>
+
+        <div class="card">
+          <div class="card-label">Phase 1 — DB &amp; Server Foundation</div>
+          <ul class="checklist">
+            <li><span class="check-box"></span> users 테이블 스키마 마이그레이션 (uid, token 컬럼)</li>
+            <li><span class="check-box"></span> 토큰 AES 암호화/복호화 유틸 (<code>services/crypto.js</code>)</li>
+            <li><span class="check-box"></span> JWT 발급/검증 유틸 (<code>services/session.js</code>)</li>
+            <li><span class="check-box"></span> OAuth 콜백: DB 저장 + sessionToken 발급 + 클라이언트 리다이렉트</li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <div class="card-label">Phase 2 — Auth API</div>
+          <ul class="checklist">
+            <li><span class="check-box"></span> <code>POST /auth/me</code> — JWT 검증, 사용자 반환</li>
+            <li><span class="check-box"></span> <code>POST /auth/refresh</code> — Naver refresh + sessionToken 재발급</li>
+            <li><span class="check-box"></span> <code>POST /auth/logout</code> — 세션 무효화</li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <div class="card-label">Phase 3 — Client</div>
+          <ul class="checklist">
+            <li><span class="check-box"></span> HttpListener 콜백에서 sessionToken 파싱·저장</li>
+            <li><span class="check-box"></span> 앱 시작 시 <code>/auth/me</code> 자동 로그인</li>
+            <li><span class="check-box"></span> sessionToken 없을 때만 OAuth 브라우저 열기</li>
+            <li><span class="check-box"></span> 401 응답 시 refresh → 실패 시 OAuth 폴백</li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <div class="card-label">Phase 4 — Test</div>
+          <ul class="checklist">
+            <li><span class="check-box"></span> 첫 로그인: OAuth → token 저장 → 메인 진입</li>
+            <li><span class="check-box"></span> 재실행: OAuth 없이 자동 로그인</li>
+            <li><span class="check-box"></span> sessionToken 만료: refresh 성공</li>
+            <li><span class="check-box"></span> refreshToken 폐기: OAuth 재실행</li>
+            <li><span class="check-box"></span> 로그아웃: 토큰 삭제 후 로그인 화면</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- Errors -->
+      <section id="errors">
+        <h2>에러 코드 참조</h2>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>code</th>
+                <th>HTTP</th>
+                <th>의미</th>
+                <th>클라이언트 처리</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>SESSION_EXPIRED</code></td>
+                <td>401</td>
+                <td>sessionToken 만료</td>
+                <td><code>/auth/refresh</code> 시도</td>
+              </tr>
+              <tr>
+                <td><code>SESSION_INVALID</code></td>
+                <td>401</td>
+                <td>JWT 서명 불일치</td>
+                <td>토큰 삭제 → OAuth</td>
+              </tr>
+              <tr>
+                <td><code>NAVER_TOKEN_REVOKED</code></td>
+                <td>401</td>
+                <td>Naver refreshToken 무효</td>
+                <td>토큰 삭제 → OAuth</td>
+              </tr>
+              <tr>
+                <td><code>REAUTH_REQUIRED</code></td>
+                <td>401</td>
+                <td>재인증 필요</td>
+                <td>토큰 삭제 → OAuth</td>
+              </tr>
+              <tr>
+                <td><code>USER_NOT_FOUND</code></td>
+                <td>404</td>
+                <td>DB에 사용자 없음</td>
+                <td>토큰 삭제 → OAuth</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <footer class="footer">
+        Naver OAuth Auto Login Architecture Guide · 재사용 가능 · 다른 프로젝트에 복사하여 적용하세요
+      </footer>
+    </main>
+  </div>
+
+  <script>
+    const links = document.querySelectorAll('.nav-link');
+    const sections = document.querySelectorAll('section[id]');
+
+    function updateActiveLink() {
+      let current = '';
+      sections.forEach(section => {
+        if (window.scrollY >= section.offsetTop - 80) {
+          current = section.getAttribute('id');
+        }
+      });
+      links.forEach(link => {
+        link.classList.toggle('active', link.getAttribute('href') === '#' + current);
+      });
+    }
+
+    window.addEventListener('scroll', updateActiveLink);
+    updateActiveLink();
+  </script>
+</body>
+</html>

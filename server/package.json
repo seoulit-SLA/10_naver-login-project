@@ -5,6 +5,8 @@
   "main": "app.js",
   "scripts": {
     "start": "node app.js",
+    "create:database": "node create-database.js",
+    "reset:database": "node reset-database.js",
     "create:users-table": "node create-users-table.js",
     "delete:user": "node delete-user.js",
     "insert:user": "node insert-user.js",
@@ -19,6 +21,7 @@
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "express-session": "^1.19.0",
+    "jsonwebtoken": "^9.0.3",
     "mysql2": "^3.22.5",
     "passport": "^0.7.0",
     "passport-naver-v2": "^2.0.8"

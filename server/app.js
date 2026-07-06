@@ -1,17 +1,17 @@
 const express = require('express');
 const path = require('path');
+const fs = require('fs'); // [추가] 파일 읽기를 위해 도입
 require('dotenv').config();
 const session = require('express-session');
 const passport = require('passport');
 const NaverStrategy = require('passport-naver-v2').Strategy;
-const { upsertUser } = require('./services/users');
 
 const app = express();
 const port = 3000;
 
 const NAVER_CLIENT_ID = process.env.NAVER_CLIENT_ID;
 const NAVER_CLIENT_SECRET = process.env.NAVER_CLIENT_SECRET;
-const NAVER_CALLBACK_URL = process.env.NAVER_CALLBACK_URL || 'http://localhost:3000/auth/naver/callback';
+const NAVER_CALLBACK_URL = process.env.NAVER_CALLBACK_URL || 'http://127.0.0.1:3000/auth/naver/callback';
 const SESSION_SECRET = process.env.SESSION_SECRET || 'dev-session-secret';
 
 app.use(express.json());
@@ -76,71 +76,27 @@ app.get('/login', (req, res) => {
   res.sendFile(path.join(__dirname, 'login.html'));
 });
 
-app.get('/auth/naver', (req, res, next) => {
-  if (!NAVER_CLIENT_ID || !NAVER_CLIENT_SECRET) {
-    return res.status(500).json({ message: 'NAVER 환경변수가 설정되지 않았습니다.' });
-  }
-  passport.authenticate('naver')(req, res, next);
-});
+// ======================================================================
+// [딸깍 자동 라우팅 시스템]
+// routes/ 폴더 내부 자바스크립트 파일을 읽어와 파일명 주소로 자동 연동합니다.
+// (예: routes/auth.js ➔ /auth 연동, routes/scores.js ➔ /scores 연동)
+// ======================================================================
+const routesPath = path.join(__dirname, 'routes');
 
-app.get('/auth/naver/callback', (req, res, next) => {
-  if (!NAVER_CLIENT_ID || !NAVER_CLIENT_SECRET) {
-    return res.status(500).json({ message: 'NAVER 환경변수가 설정되지 않았습니다.' });
-  }
-
-  passport.authenticate('naver', { failureRedirect: '/login' }, async (error, user) => {
-    if (error || !user) {
-      console.error('[NAVER] callback auth failed:', error ? error.message : 'no user');
-      return res.status(401).json({ message: '네이버 로그인 실패' });
+if (fs.existsSync(routesPath)) {
+  fs.readdirSync(routesPath).forEach(file => {
+    if (file.endsWith('.js')) {
+      const routeName = file.replace('.js', '');
+      const router = require(path.join(routesPath, file));
+      
+      app.use(`/${routeName}`, router);
+      console.log(`[Auto-Route] Mounted: /${routeName} ➔ (routes/${file})`);
     }
-
-    const profile = {
-      uid: String(user.id),
-      email: user.email,
-      name: user.name,
-    };
-
-    console.log('[NAVER] user info');
-    console.log(`uid : ${profile.uid}`);
-    console.log(`email : ${profile.email}`);
-    console.log(`name : ${profile.name}`);
-
-    try {
-      const dbResult = await upsertUser(profile);
-      console.log('[NAVER] DB insert response', dbResult);
-
-      return res.status(200).json({
-        message: '네이버 로그인 성공',
-        user: profile,
-        db: {
-          insertId: dbResult.insertId,
-          affectedRows: dbResult.affectedRows,
-          savedUser: dbResult.user,
-        },
-      });
-    } catch (dbError) {
-      console.error('[NAVER] DB insert failed:', dbError.message);
-      return res.status(500).json({
-        message: '사용자 정보 DB 저장 실패',
-        user: profile,
-        error: dbError.message,
-      });
-    }
-  })(req, res, next);
-});
-
-app.post('/login', async (req, res) => {
-  const { sub, email, name } = req.body;
-  console.log('[LOGIN] payload received', { sub, email, name });
-
-  if (!sub || !email || !name) {
-    console.warn('[LOGIN] validation failed: missing sub/email/name');
-    return res.status(400).json({ message: 'sub, email, name은 필수입니다.' });
-  }
-
-  console.log('[LOGIN] data received', { sub, email, name });
-  res.status(200).json({ sub, email, name });
-});
+  });
+} else {
+  console.error(`[Auto-Route] 에러: routes 폴더를 찾을 수 없습니다.`);
+}
+// ======================================================================
 
 app.listen(port, () => {
   console.log(`Server is running on http://localhost:${port}`);

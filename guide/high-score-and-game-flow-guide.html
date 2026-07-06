@@ -1,0 +1,1048 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>게임 씬 흐름 &amp; 최고 점수 연동 가이드</title>
+  <style>
+    :root {
+      --bg: #0a0a0b;
+      --bg-elevated: #111113;
+      --bg-subtle: #18181b;
+      --bg-hover: #1f1f23;
+      --border: rgba(255, 255, 255, 0.08);
+      --border-strong: rgba(255, 255, 255, 0.12);
+      --text: #ededed;
+      --text-secondary: #a1a1aa;
+      --text-muted: #71717a;
+      --accent: #5e6ad2;
+      --accent-hover: #6872d9;
+      --accent-subtle: rgba(94, 106, 210, 0.12);
+      --success: #3dd68c;
+      --warning: #f5a623;
+      --danger: #e5484d;
+      --code-bg: #141416;
+      --radius: 8px;
+      --radius-lg: 12px;
+      --font: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --mono: "JetBrains Mono", "SF Mono", "Fira Code", Consolas, monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.65;
+      font-size: 15px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 260px 1fr;
+      min-height: 100vh;
+    }
+
+    .sidebar {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+      border-right: 1px solid var(--border);
+      background: var(--bg-elevated);
+      padding: 24px 16px;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 0 8px 24px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 20px;
+    }
+
+    .logo-icon {
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      background: linear-gradient(135deg, #3dd68c, var(--accent));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .logo-text { font-size: 13px; font-weight: 600; color: var(--text); letter-spacing: -0.01em; }
+    .logo-sub { font-size: 11px; color: var(--text-muted); font-weight: 400; }
+
+    .nav-group { margin-bottom: 20px; }
+    .nav-label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-muted);
+      padding: 0 8px;
+      margin-bottom: 8px;
+    }
+
+    .nav-link {
+      display: block;
+      padding: 6px 8px;
+      border-radius: 6px;
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-size: 13px;
+      transition: background 0.15s, color 0.15s;
+    }
+
+    .nav-link:hover { background: var(--bg-hover); color: var(--text); }
+    .nav-link.active { background: var(--accent-subtle); color: var(--accent-hover); }
+
+    .main { max-width: 860px; padding: 48px 56px 96px; }
+
+    .hero { margin-bottom: 48px; }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: rgba(61, 214, 140, 0.1);
+      border: 1px solid rgba(61, 214, 140, 0.25);
+      color: var(--success);
+      font-size: 12px;
+      font-weight: 500;
+      margin-bottom: 16px;
+    }
+
+    .badge-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--success); }
+
+    h1 {
+      font-size: 32px;
+      font-weight: 600;
+      letter-spacing: -0.03em;
+      line-height: 1.2;
+      margin-bottom: 12px;
+    }
+
+    .hero-desc { font-size: 16px; color: var(--text-secondary); max-width: 640px; }
+
+    section { margin-bottom: 56px; scroll-margin-top: 24px; }
+
+    h2 {
+      font-size: 20px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    h3 { font-size: 15px; font-weight: 600; margin: 24px 0 10px; color: var(--text); }
+    h4 { font-size: 14px; font-weight: 600; margin: 16px 0 8px; color: var(--text); }
+
+    p { margin-bottom: 12px; color: var(--text-secondary); }
+    p strong { color: var(--text); font-weight: 500; }
+
+    ul, ol { margin: 0 0 16px 20px; color: var(--text-secondary); }
+    li { margin-bottom: 6px; }
+
+    .card {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 20px 24px;
+      margin-bottom: 16px;
+    }
+
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .card-sm {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+    }
+
+    .card-sm h4 { font-size: 13px; margin: 0 0 6px; }
+    .card-sm p { font-size: 13px; margin: 0; color: var(--text-muted); }
+
+    .table-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      margin-bottom: 16px;
+    }
+
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+
+    th {
+      text-align: left;
+      padding: 10px 16px;
+      background: var(--bg-subtle);
+      color: var(--text-muted);
+      font-weight: 500;
+      font-size: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    td {
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text-secondary);
+      vertical-align: top;
+    }
+
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(255,255,255,0.02); }
+
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 16px 20px;
+      overflow-x: auto;
+      margin-bottom: 16px;
+      font-family: var(--mono);
+      font-size: 12.5px;
+      line-height: 1.6;
+      color: #c4c4cc;
+    }
+
+    code {
+      font-family: var(--mono);
+      font-size: 0.88em;
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 1px 6px;
+      color: #d4d4d8;
+    }
+
+    pre code { background: none; border: none; padding: 0; font-size: inherit; }
+
+    .comment { color: #6b7280; }
+    .keyword { color: #c084fc; }
+    .string { color: #86efac; }
+    .type { color: #67e8f9; }
+    .fn { color: #fcd34d; }
+
+    .flow { display: flex; flex-direction: column; gap: 0; margin-bottom: 16px; }
+    .flow-step { display: flex; gap: 16px; align-items: flex-start; }
+    .flow-line { display: flex; flex-direction: column; align-items: center; width: 32px; flex-shrink: 0; }
+    .flow-dot {
+      width: 10px; height: 10px; border-radius: 50%;
+      background: var(--accent); border: 2px solid var(--bg-elevated);
+      box-shadow: 0 0 0 2px var(--accent); flex-shrink: 0; margin-top: 5px;
+    }
+    .flow-connector { width: 2px; flex: 1; min-height: 24px; background: var(--border-strong); }
+    .flow-content { flex: 1; padding-bottom: 20px; }
+    .flow-title { font-size: 14px; font-weight: 500; color: var(--text); margin-bottom: 4px; }
+    .flow-desc { font-size: 13px; color: var(--text-muted); }
+
+    .callout {
+      display: flex; gap: 12px; padding: 14px 16px;
+      border-radius: var(--radius); border: 1px solid var(--border);
+      background: var(--bg-subtle); margin-bottom: 16px; font-size: 13px;
+    }
+    .callout-icon { flex-shrink: 0; font-size: 16px; }
+    .callout-body { color: var(--text-secondary); }
+    .callout-body strong { color: var(--text); }
+    .callout.warn { border-color: rgba(245, 166, 35, 0.25); background: rgba(245, 166, 35, 0.06); }
+    .callout.success { border-color: rgba(61, 214, 140, 0.25); background: rgba(61, 214, 140, 0.06); }
+    .callout.danger { border-color: rgba(229, 72, 77, 0.25); background: rgba(229, 72, 77, 0.06); }
+
+    .checklist { list-style: none; margin-left: 0; }
+    .checklist li {
+      display: flex; gap: 10px; align-items: flex-start;
+      padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px;
+    }
+    .checklist li:last-child { border-bottom: none; }
+    .check-box {
+      width: 16px; height: 16px; border: 1.5px solid var(--border-strong);
+      border-radius: 4px; flex-shrink: 0; margin-top: 2px;
+    }
+
+    .step-num {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 22px; height: 22px; border-radius: 50%;
+      background: var(--accent-subtle); color: var(--accent-hover);
+      font-size: 12px; font-weight: 600; margin-right: 8px;
+    }
+
+    .sequence {
+      font-family: var(--mono); font-size: 12px; line-height: 1.8;
+      color: var(--text-muted); background: var(--code-bg);
+      border: 1px solid var(--border); border-radius: var(--radius-lg);
+      padding: 20px 24px; overflow-x: auto; margin-bottom: 16px;
+    }
+    .sequence .actor { color: var(--accent-hover); }
+    .sequence .action { color: var(--text-secondary); }
+    .sequence .note { color: #6b7280; font-style: italic; }
+
+    .footer {
+      margin-top: 64px; padding-top: 24px;
+      border-top: 1px solid var(--border);
+      font-size: 12px; color: var(--text-muted);
+    }
+
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; }
+      .sidebar {
+        position: relative; height: auto;
+        border-right: none; border-bottom: 1px solid var(--border);
+      }
+      .main { padding: 32px 24px 64px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="logo">
+        <div class="logo-icon">G</div>
+        <div>
+          <div class="logo-text">Game &amp; Score Guide</div>
+          <div class="logo-sub">Unity + Node.js</div>
+        </div>
+      </div>
+
+      <nav>
+        <div class="nav-group">
+          <div class="nav-label">Overview</div>
+          <a class="nav-link" href="#overview">개요</a>
+          <a class="nav-link" href="#scene-flow">씬 흐름</a>
+          <a class="nav-link" href="#game-rules">게임 규칙</a>
+        </div>
+        <div class="nav-group">
+          <div class="nav-label">Setup</div>
+          <a class="nav-link" href="#prerequisites">사전 준비</a>
+          <a class="nav-link" href="#server-db">서버 DB 마이그레이션</a>
+          <a class="nav-link" href="#loading-canvas">GlobalLoadingCanvas</a>
+          <a class="nav-link" href="#unity-inspector">Unity Inspector 연결</a>
+        </div>
+        <div class="nav-group">
+          <div class="nav-label">Implementation</div>
+          <a class="nav-link" href="#server-api">서버 API</a>
+          <a class="nav-link" href="#home-score">Home — 최고 점수 조회</a>
+          <a class="nav-link" href="#game-submit">Game — 점수 제출</a>
+          <a class="nav-link" href="#auth-client">AuthClient</a>
+        </div>
+        <div class="nav-group">
+          <div class="nav-label">Test</div>
+          <a class="nav-link" href="#postman">Postman 테스트</a>
+          <a class="nav-link" href="#test-tools">Test Tools</a>
+          <a class="nav-link" href="#integration">통합 테스트</a>
+          <a class="nav-link" href="#troubleshooting">문제 해결</a>
+        </div>
+      </nav>
+    </aside>
+
+    <main class="main">
+      <header class="hero">
+        <div class="badge"><span class="badge-dot"></span>Follow-Along Guide</div>
+        <h1>게임 씬 흐름 &amp;<br>최고 점수 서버 연동 가이드</h1>
+        <p class="hero-desc">
+          로그인 후 홈 → 게임 → 게임오버 → 홈으로 이어지는 씬 구조, 서버 통신 중 로딩 UI,
+          최고 점수 조회·제출 API를 처음부터 끝까지 따라 만들 수 있는 문서입니다.
+          선행 작업: <a href="naver-auto-login-guide.html" style="color:var(--accent-hover)">Naver OAuth 자동 로그인 가이드</a>
+        </p>
+      </header>
+
+      <!-- Overview -->
+      <section id="overview">
+        <h2>개요</h2>
+        <p>
+          이번에 추가된 기능은 크게 <strong>씬 흐름</strong>, <strong>로딩 UI</strong>, <strong>최고 점수 서버 연동</strong> 세 가지입니다.
+          각 씬에는 <code>XXXMain</code> 컴포넌트가 붙은 GameObject가 있고, UI는 Inspector의
+          <code>[SerializeField]</code>로 연결합니다.
+        </p>
+
+        <div class="card-grid">
+          <div class="card-sm">
+            <h4>씬 흐름</h4>
+            <p>App → Title → Home → Game → GameOver → Home</p>
+          </div>
+          <div class="card-sm">
+            <h4>로딩 UI</h4>
+            <p>서버 통신 중 GlobalLoadingCanvas 표시</p>
+          </div>
+          <div class="card-sm">
+            <h4>최고 점수</h4>
+            <p>Home 진입 시 조회, Game 종료 시 신기록만 제출</p>
+          </div>
+          <div class="card-sm">
+            <h4>싱글톤</h4>
+            <p>AppMain, AuthClient, GlobalLoadingCanvas (DontDestroyOnLoad)</p>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>씬</th><th>스크립트</th><th>역할</th><th>주요 UI</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>App</code></td>
+                <td><code>AppMain.cs</code></td>
+                <td>OAuth, 씬 전환, 싱글톤 생성</td>
+                <td>GlobalLoadingCanvas Prefab</td>
+              </tr>
+              <tr>
+                <td><code>TitleScene</code></td>
+                <td><code>TitleMain.cs</code></td>
+                <td>네이버 로그인 버튼</td>
+                <td><code>loginButton</code></td>
+              </tr>
+              <tr>
+                <td><code>HomeScene</code></td>
+                <td><code>HomeMain.cs</code></td>
+                <td>게임 시작, 최고 점수 표시</td>
+                <td><code>startButton</code>, <code>scoreText</code></td>
+              </tr>
+              <tr>
+                <td><code>GameScene</code></td>
+                <td><code>GameMain.cs</code></td>
+                <td>10초 클릭 게임, 종료 시 점수 제출</td>
+                <td><code>timerFill</code>, <code>clickButton</code>, <code>scoreText</code></td>
+              </tr>
+              <tr>
+                <td><code>GameOverScene</code></td>
+                <td><code>GameOverMain.cs</code></td>
+                <td>이번 판 점수 표시, 홈 복귀</td>
+                <td><code>homeButton</code>, <code>scoreText</code></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Scene Flow -->
+      <section id="scene-flow">
+        <h2>씬 흐름</h2>
+
+        <div class="flow">
+          <div class="flow-step">
+            <div class="flow-line"><div class="flow-dot"></div><div class="flow-connector"></div></div>
+            <div class="flow-content">
+              <div class="flow-title">App 씬 시작</div>
+              <div class="flow-desc"><code>AppMain</code>이 DontDestroyOnLoad로 유지되며 TitleScene으로 이동</div>
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="flow-line"><div class="flow-dot"></div><div class="flow-connector"></div></div>
+            <div class="flow-content">
+              <div class="flow-title">TitleScene — 로그인</div>
+              <div class="flow-desc">sessionToken 있으면 자동 로그인 → Home / 없으면 loginButton → OAuth</div>
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="flow-line"><div class="flow-dot"></div><div class="flow-connector"></div></div>
+            <div class="flow-content">
+              <div class="flow-title">HomeScene — 최고 점수 로드</div>
+              <div class="flow-desc"><code>POST /scores/me</code> → scoreText 갱신 → startButton → GameScene</div>
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="flow-line"><div class="flow-dot"></div><div class="flow-connector"></div></div>
+            <div class="flow-content">
+              <div class="flow-title">GameScene — 10초 클릭</div>
+              <div class="flow-desc">클릭마다 +10점, 타이머 0 → 신기록이면 <code>POST /scores/submit</code></div>
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="flow-line"><div class="flow-dot"></div></div>
+            <div class="flow-content">
+              <div class="flow-title">GameOverScene → HomeScene</div>
+              <div class="flow-desc">이번 판 점수 표시 → homeButton → Home (갱신된 최고 점수 다시 로드)</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="sequence">
+<span class="actor">Unity Client</span>  <span class="action">HomeScene Start()</span>
+<span class="action">  → GlobalLoadingCanvas.Show()</span>
+<span class="action">  → POST /scores/me  (Authorization: Bearer sessionToken)</span>
+<span class="action">  → scoreText = bestScore</span>
+<span class="action">  → GlobalLoadingCanvas.Hide()</span>
+
+<span class="actor">Unity Client</span>  <span class="action">GameScene EndGame()</span>
+<span class="action">  → GlobalLoadingCanvas.Show()</span>
+<span class="action">  → POST /scores/me  (현재 최고 점수 확인)</span>
+<span class="action">  → if (currentScore &gt; bestScore) POST /scores/submit</span>
+<span class="action">  → GlobalLoadingCanvas.Hide()</span>
+<span class="action">  → GoToGameOver()</span>
+        </div>
+      </section>
+
+      <!-- Game Rules -->
+      <section id="game-rules">
+        <h2>게임 규칙</h2>
+        <p>점수는 씬 간 공유를 위해 정적 클래스 <code>GameSession</code>에 저장합니다.</p>
+
+        <pre><code><span class="comment">// client/Assets/GameSession.cs</span>
+<span class="keyword">public static class</span> <span class="type">GameSession</span>
+{
+    <span class="keyword">public const float</span> GameDurationSeconds = <span class="string">10f</span>;
+    <span class="keyword">public const int</span> PointsPerClick = <span class="string">10</span>;
+
+    <span class="keyword">public static int</span> Score { <span class="keyword">get</span>; <span class="keyword">private set</span>; }
+
+    <span class="keyword">public static void</span> <span class="fn">ResetScore</span>() => Score = <span class="string">0</span>;
+    <span class="keyword">public static void</span> <span class="fn">AddScore</span>(<span class="keyword">int</span> points) => Score += points;
+}</code></pre>
+
+        <ul>
+          <li>Home에서 게임 시작 시 <code>GameSession.ResetScore()</code> 호출</li>
+          <li>GameScene에서 클릭 버튼마다 <code>AddScore(10)</code></li>
+          <li>GameOverScene에서 <code>GameSession.Score</code>를 화면에 표시</li>
+        </ul>
+      </section>
+
+      <!-- Prerequisites -->
+      <section id="prerequisites">
+        <h2>사전 준비</h2>
+
+        <h3><span class="step-num">1</span>서버 실행</h3>
+        <pre><code>cd server
+npm install
+npm start</code></pre>
+        <p>기본 주소: <code>http://127.0.0.1:3000</code> — Unity <code>AuthClient</code>의 <code>BaseUrl</code>과 일치해야 합니다.</p>
+
+        <h3><span class="step-num">2</span>네이버 로그인 완료</h3>
+        <p>
+          Unity Play → TitleScene에서 로그인 → sessionToken 저장.
+          로그인 가이드는 <a href="naver-auto-login-guide.html" style="color:var(--accent-hover)">naver-auto-login-guide.html</a> 참고.
+        </p>
+
+        <h3><span class="step-num">3</span>Build Settings 씬 등록</h3>
+        <p>아래 씬이 <strong>File → Build Settings</strong>에 순서대로 등록되어 있어야 합니다.</p>
+        <pre><code>App
+TitleScene
+HomeScene
+GameScene
+GameOverScene</code></pre>
+      </section>
+
+      <!-- Server DB -->
+      <section id="server-db">
+        <h2>서버 DB 마이그레이션</h2>
+
+        <h3><span class="step-num">1</span>테이블 생성</h3>
+        <pre><code>cd server
+npm run migrate:high-scores</code></pre>
+
+        <p>생성되는 테이블: <code>user_high_scores</code></p>
+
+        <pre><code><span class="comment">-- server/migrations/002_user_high_scores.sql</span>
+CREATE TABLE IF NOT EXISTS user_high_scores (
+  id INT NOT NULL AUTO_INCREMENT,
+  uid VARCHAR(64) NOT NULL,
+  best_score INT NOT NULL DEFAULT 0,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_user_high_scores_uid (uid),
+  KEY idx_user_high_scores_best_score (best_score DESC)
+);</code></pre>
+
+        <div class="callout success">
+          <div class="callout-icon">✓</div>
+          <div class="callout-body">
+            <strong>uid</strong>는 <code>users</code> 테이블의 네이버 uid와 동일합니다.
+            한 사용자당 최고 점수 1행(UNIQUE)만 저장됩니다.
+          </div>
+        </div>
+
+        <h3>관련 서버 파일</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>파일</th><th>역할</th></tr></thead>
+            <tbody>
+              <tr><td><code>server/migrate-high-scores.js</code></td><td>마이그레이션 실행 스크립트</td></tr>
+              <tr><td><code>server/services/highScores.js</code></td><td>조회·제출·랭킹(미사용) 비즈니스 로직</td></tr>
+              <tr><td><code>server/routes/scores.js</code></td><td>HTTP 라우트 핸들러</td></tr>
+              <tr><td><code>server/app.js</code></td><td><code>POST /scores/me</code>, <code>POST /scores/submit</code> 등록</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- GlobalLoadingCanvas -->
+      <section id="loading-canvas">
+        <h2>GlobalLoadingCanvas</h2>
+        <p>서버 API 호출 중 화면 전체를 덮는 로딩 오버레이입니다. 씬이 바뀌어도 유지됩니다.</p>
+
+        <h3>구성 요소</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>파일</th><th>설명</th></tr></thead>
+            <tbody>
+              <tr><td><code>GlobalLoadingCanvas.prefab</code></td><td>Screen Space Overlay Canvas + 반투명 배경 + 회전 아이콘</td></tr>
+              <tr><td><code>GlobalLoadingCanvas.cs</code></td><td>싱글톤, <code>Show()</code> / <code>Hide()</code></td></tr>
+              <tr><td><code>LoadingIconSpinner.cs</code></td><td>로딩 아이콘 Z축 회전</td></tr>
+              <tr><td><code>Shaders/UIWhite.shader</code></td><td>아이콘을 흰색으로 표시</td></tr>
+              <tr><td><code>Materials/LoadingIconWhite.mat</code></td><td>흰색 UI 머티리얼</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3><span class="step-num">1</span>AppMain에서 Prefab 연결</h3>
+        <p>App 씬의 <code>AppMain</code> GameObject Inspector에서 <code>Global Loading Canvas Prefab</code> 슬롯에 Prefab을 드래그합니다.</p>
+
+        <pre><code><span class="comment">// AppMain.Awake() 에서 자동 생성</span>
+EnsureGlobalLoadingCanvas();  <span class="comment">// prefab Instantiate → DontDestroyOnLoad</span></code></pre>
+
+        <h3><span class="step-num">2</span>사용 패턴</h3>
+        <pre><code>GlobalLoadingCanvas.Instance?.Show();
+<span class="keyword">try</span>
+{
+    <span class="comment">// 서버 API 코루틴...</span>
+}
+<span class="keyword">finally</span>
+{
+    GlobalLoadingCanvas.Instance?.Hide();
+}</code></pre>
+
+        <div class="callout">
+          <div class="callout-icon">ℹ</div>
+          <div class="callout-body">
+            Canvas <code>sortingOrder = 1000</code>으로 다른 UI 위에 표시됩니다.
+            <code>Instance</code>가 null이면 로딩 없이 API만 실행됩니다(경고 로그 확인).
+          </div>
+        </div>
+      </section>
+
+      <!-- Unity Inspector -->
+      <section id="unity-inspector">
+        <h2>Unity Inspector 연결</h2>
+        <p>각 씬에서 <code>XXXMain</code> GameObject를 선택하고 아래 필드를 연결하세요.</p>
+
+        <h3>HomeScene — HomeMain</h3>
+        <ul>
+          <li><code>startButton</code> → 게임 시작 Button</li>
+          <li><code>scoreText</code> → 최고 점수 TextMeshProUGUI</li>
+        </ul>
+
+        <h3>GameScene — GameMain</h3>
+        <ul>
+          <li><code>timerFill</code> → Image (Type: Filled, Fill Method: Radial 360 등)</li>
+          <li><code>clickButton</code> → 클릭 Button</li>
+          <li><code>scoreText</code> → 현재 점수 TextMeshProUGUI</li>
+        </ul>
+
+        <h3>GameOverScene — GameOverMain</h3>
+        <ul>
+          <li><code>homeButton</code> → 홈으로 Button</li>
+          <li><code>scoreText</code> → 이번 판 점수 TextMeshProUGUI</li>
+        </ul>
+
+        <div class="callout warn">
+          <div class="callout-icon">⚠</div>
+          <div class="callout-body">
+            필드가 비어 있으면 Console에 <code>is not assigned on XXXMain</code> 에러가 출력됩니다.
+            Play 전 Inspector 연결을 확인하세요.
+          </div>
+        </div>
+      </section>
+
+      <!-- Server API -->
+      <section id="server-api">
+        <h2>서버 API</h2>
+        <p>두 API 모두 <strong>POST</strong>이며, <code>Authorization: Bearer {sessionToken}</code> 헤더가 필요합니다.</p>
+
+        <h3>POST /scores/me — 내 최고 점수 조회</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>항목</th><th>값</th></tr></thead>
+            <tbody>
+              <tr><td>Method</td><td>POST</td></tr>
+              <tr><td>Body</td><td><code>{}</code> (빈 JSON)</td></tr>
+              <tr><td>성공 200</td><td><code>{ "uid", "bestScore", "updatedAt" }</code></td></tr>
+              <tr><td>기록 없음</td><td><code>bestScore: 0</code>, <code>updatedAt: null</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <pre><code><span class="comment">// 응답 예시</span>
+{
+  <span class="string">"uid"</span>: <span class="string">"abc123"</span>,
+  <span class="string">"bestScore"</span>: <span class="string">120</span>,
+  <span class="string">"updatedAt"</span>: <span class="string">"2026-07-06T07:00:00.000Z"</span>
+}</code></pre>
+
+        <h3>POST /scores/submit — 최고 점수 제출</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>항목</th><th>값</th></tr></thead>
+            <tbody>
+              <tr><td>Method</td><td>POST</td></tr>
+              <tr><td>Body</td><td><code>{ "score": 150 }</code> — 0 이상 정수</td></tr>
+              <tr><td>신기록</td><td>DB 업데이트, <code>isNewRecord: true</code></td></tr>
+              <tr><td>기존 이상</td><td>DB 변경 없음, <code>isNewRecord: false</code></td></tr>
+              <tr><td>잘못된 score</td><td>400 <code>INVALID_SCORE</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <pre><code><span class="comment">// 신기록 응답 예시</span>
+{
+  <span class="string">"uid"</span>: <span class="string">"abc123"</span>,
+  <span class="string">"submittedScore"</span>: <span class="string">150</span>,
+  <span class="string">"bestScore"</span>: <span class="string">150</span>,
+  <span class="string">"previousBestScore"</span>: <span class="string">120</span>,
+  <span class="string">"isNewRecord"</span>: <span class="keyword">true</span>,
+  <span class="string">"updatedAt"</span>: <span class="string">"2026-07-06T07:15:00.000Z"</span>
+}</code></pre>
+
+        <div class="callout">
+          <div class="callout-icon">ℹ</div>
+          <div class="callout-body">
+            서버(<code>highScores.js</code>)와 클라이언트(<code>GameMain</code>) 모두
+            “기존 최고 점수보다 높을 때만” 갱신합니다. 이중 방어 구조입니다.
+          </div>
+        </div>
+      </section>
+
+      <!-- Home Score -->
+      <section id="home-score">
+        <h2>Home — 최고 점수 조회</h2>
+        <p><code>HomeMain.Start()</code>에서 코루틴 <code>LoadBestScore()</code>를 실행합니다.</p>
+
+        <div class="flow">
+          <div class="flow-step">
+            <div class="flow-line"><div class="flow-dot"></div><div class="flow-connector"></div></div>
+            <div class="flow-content">
+              <div class="flow-title">GlobalLoadingCanvas.Show()</div>
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="flow-line"><div class="flow-dot"></div><div class="flow-connector"></div></div>
+            <div class="flow-content">
+              <div class="flow-title">SessionTokenStore.GetToken()</div>
+              <div class="flow-desc">토큰 없으면 scoreText = 0</div>
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="flow-line"><div class="flow-dot"></div><div class="flow-connector"></div></div>
+            <div class="flow-content">
+              <div class="flow-title">AuthClient.GetMyBestScore()</div>
+              <div class="flow-desc">성공 시 scoreText 갱신</div>
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="flow-line"><div class="flow-dot"></div></div>
+            <div class="flow-content">
+              <div class="flow-title">finally → GlobalLoadingCanvas.Hide()</div>
+            </div>
+          </div>
+        </div>
+
+        <pre><code><span class="comment">// client/Assets/HomeMain.cs (핵심)</span>
+<span class="keyword">private</span> IEnumerator <span class="fn">LoadBestScore</span>()
+{
+    GlobalLoadingCanvas.Instance?.Show();
+    <span class="keyword">try</span>
+    {
+        <span class="keyword">var</span> sessionToken = SessionTokenStore.GetToken();
+        <span class="keyword">yield return</span> AuthClient.Instance.GetMyBestScore(
+            sessionToken,
+            result => UpdateScoreText(result.bestScore),
+            code => UpdateScoreText(<span class="string">0</span>)
+        );
+    }
+    <span class="keyword">finally</span>
+    {
+        GlobalLoadingCanvas.Instance?.Hide();
+    }
+}</code></pre>
+
+        <p>게임 시작 버튼 클릭 시:</p>
+        <pre><code>GameSession.ResetScore();
+AppMain.Instance.GoToGame();</code></pre>
+      </section>
+
+      <!-- Game Submit -->
+      <section id="game-submit">
+        <h2>Game — 점수 제출</h2>
+        <p>타이머가 0이 되면 <code>EndGame()</code> → <code>SubmitScoreIfRecordAndGoToGameOver()</code> 코루틴이 실행됩니다.</p>
+
+        <div class="flow">
+          <div class="flow-step">
+            <div class="flow-line"><div class="flow-dot"></div><div class="flow-connector"></div></div>
+            <div class="flow-content">
+              <div class="flow-title">isGameOver = true, clickButton 비활성화</div>
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="flow-line"><div class="flow-dot"></div><div class="flow-connector"></div></div>
+            <div class="flow-content">
+              <div class="flow-title">GlobalLoadingCanvas.Show()</div>
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="flow-line"><div class="flow-dot"></div><div class="flow-connector"></div></div>
+            <div class="flow-content">
+              <div class="flow-title">POST /scores/me → bestScore 확인</div>
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="flow-line"><div class="flow-dot"></div><div class="flow-connector"></div></div>
+            <div class="flow-content">
+              <div class="flow-title">currentScore &gt; bestScore 이면 POST /scores/submit</div>
+              <div class="flow-desc">아니면 로그만 남기고 스킵</div>
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="flow-line"><div class="flow-dot"></div></div>
+            <div class="flow-content">
+              <div class="flow-title">finally → Hide() + GoToGameOver()</div>
+              <div class="flow-desc">API 실패해도 GameOverScene으로 이동</div>
+            </div>
+          </div>
+        </div>
+
+        <pre><code><span class="comment">// client/Assets/GameMain.cs (핵심 로직)</span>
+<span class="keyword">if</span> (currentScore <= bestScoreResponse.bestScore)
+{
+    <span class="comment">// 제출 스킵</span>
+    <span class="keyword">yield break</span>;
+}
+
+<span class="keyword">yield return</span> AuthClient.Instance.SubmitBestScore(
+    sessionToken,
+    currentScore,
+    result => { <span class="comment">/* 로그: isNewRecord */</span> },
+    code => { <span class="comment">/* 경고 로그 */</span> }
+);</code></pre>
+
+        <p>GameOverScene에서는 서버 통신 없이 <code>GameSession.Score</code>(이번 판 점수)만 표시합니다.</p>
+      </section>
+
+      <!-- AuthClient -->
+      <section id="auth-client">
+        <h2>AuthClient</h2>
+        <p><code>AuthClient</code>는 AppMain이 자동 생성하며 DontDestroyOnLoad로 유지됩니다.</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>메서드</th><th>엔드포인트</th><th>용도</th></tr></thead>
+            <tbody>
+              <tr><td><code>GetMe</code></td><td>POST /auth/me</td><td>자동 로그인</td></tr>
+              <tr><td><code>Refresh</code></td><td>POST /auth/refresh</td><td>토큰 갱신</td></tr>
+              <tr><td><code>GetMyBestScore</code></td><td>POST /scores/me</td><td>최고 점수 조회</td></tr>
+              <tr><td><code>SubmitBestScore</code></td><td>POST /scores/submit</td><td>최고 점수 제출</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>응답 DTO</h3>
+        <pre><code><span class="keyword">public class</span> <span class="type">ScoreMeResponse</span>
+{
+    <span class="keyword">public string</span> uid;
+    <span class="keyword">public int</span> bestScore;
+    <span class="keyword">public string</span> updatedAt;
+}
+
+<span class="keyword">public class</span> <span class="type">ScoreSubmitResponse</span>
+{
+    <span class="keyword">public string</span> uid;
+    <span class="keyword">public int</span> submittedScore;
+    <span class="keyword">public int</span> bestScore;
+    <span class="keyword">public int</span> previousBestScore;
+    <span class="keyword">public bool</span> isNewRecord;
+    <span class="keyword">public string</span> updatedAt;
+}</code></pre>
+      </section>
+
+      <!-- Postman -->
+      <section id="postman">
+        <h2>Postman 테스트</h2>
+
+        <h3><span class="step-num">1</span>sessionToken 확보</h3>
+        <ol>
+          <li>Unity Play → 네이버 로그인 완료</li>
+          <li>Unity 메뉴 <strong>Tools → Naver Login → Test Tools</strong></li>
+          <li><strong>Open sessionToken Folder</strong> 클릭 → <code>sessionToken</code> 파일 내용 복사</li>
+        </ol>
+
+        <h3><span class="step-num">2</span>POST /scores/me</h3>
+        <pre><code>URL:     http://127.0.0.1:3000/scores/me
+Method:  POST
+Headers: Authorization: Bearer {sessionToken}
+         Content-Type: application/json
+Body:    {}</code></pre>
+
+        <h3><span class="step-num">3</span>POST /scores/submit</h3>
+        <pre><code>URL:     http://127.0.0.1:3000/scores/submit
+Method:  POST
+Headers: Authorization: Bearer {sessionToken}
+         Content-Type: application/json
+Body:    { "score": 100 }</code></pre>
+
+        <h3>예상 결과</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>상황</th><th>submit 응답</th></tr></thead>
+            <tbody>
+              <tr><td>첫 기록 (100)</td><td><code>isNewRecord: true</code>, <code>bestScore: 100</code></td></tr>
+              <tr><td>같거나 낮은 점수 (80)</td><td><code>isNewRecord: false</code>, <code>bestScore: 100</code> 유지</td></tr>
+              <tr><td>신기록 (150)</td><td><code>isNewRecord: true</code>, <code>bestScore: 150</code></td></tr>
+              <tr><td>토큰 없음/만료</td><td>401 Unauthorized</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Test Tools -->
+      <section id="test-tools">
+        <h2>Test Tools</h2>
+        <p>Unity Editor 메뉴: <strong>Tools → Naver Login → Test Tools</strong></p>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>기능</th><th>설명</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><strong>Full Reset</strong></td>
+                <td>Chrome 쿠키 + sessionToken + DB + Naver revoke — 처음부터 OAuth 테스트</td>
+              </tr>
+              <tr>
+                <td><strong>Open sessionToken Folder</strong></td>
+                <td>sessionToken 파일 위치를 탐색기에서 열기 (Postman·디버깅용)</td>
+              </tr>
+              <tr>
+                <td>Status</td>
+                <td>토큰 저장 여부, DB 사용자 수, Test API 활성화 여부 표시</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout warn">
+          <div class="callout-icon">⚠</div>
+          <div class="callout-body">
+            DB 사용자 수 조회는 <code>server/.env</code>에
+            <code>ENABLE_TEST_ROUTES=true</code> 설정 후 서버 재시작이 필요합니다.
+          </div>
+        </div>
+      </section>
+
+      <!-- Integration Test -->
+      <section id="integration">
+        <h2>통합 테스트</h2>
+        <p>아래 순서대로 Play Mode에서 확인하세요. 체크박스는 브라우저에서 직접 체크할 수 있습니다.</p>
+
+        <ul class="checklist">
+          <li><span class="check-box"></span>서버 실행 + <code>npm run migrate:high-scores</code> 완료</li>
+          <li><span class="check-box"></span>네이버 로그인 → HomeScene 진입</li>
+          <li><span class="check-box"></span>Home 진입 시 로딩 표시 → scoreText에 최고 점수(처음이면 0)</li>
+          <li><span class="check-box"></span>게임 시작 → 10초 동안 클릭 → 점수 증가 확인</li>
+          <li><span class="check-box"></span>타이머 종료 → 로딩 표시 → GameOverScene 이동</li>
+          <li><span class="check-box"></span>GameOver scoreText = 이번 판 점수</li>
+          <li><span class="check-box"></span>홈 버튼 → Home scoreText = 갱신된 최고 점수</li>
+          <li><span class="check-box"></span>같은 점수 이하로 다시 플레이 → Home 최고 점수 변화 없음</li>
+          <li><span class="check-box"></span>더 높은 점수로 플레이 → Home 최고 점수 갱신</li>
+          <li><span class="check-box"></span>Console 로그: <code>[HOME]</code>, <code>[GAME]</code>, <code>[SCORE]</code> 태그 확인</li>
+        </ul>
+
+        <h3>로그 확인 예시</h3>
+        <pre><code>[HOME] best score loaded | bestScore=120
+[GAME] score submitted | current=150 best=150 isNewRecord=True
+[GAME] score not submitted | current=80 best=150</code></pre>
+      </section>
+
+      <!-- Troubleshooting -->
+      <section id="troubleshooting">
+        <h2>문제 해결</h2>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>증상</th><th>원인 / 해결</th></tr></thead>
+            <tbody>
+              <tr>
+                <td>scoreText가 항상 0</td>
+                <td>sessionToken 없음 → 재로그인. AuthClient null → App 씬부터 Play</td>
+              </tr>
+              <tr>
+                <td>로딩 UI가 안 보임</td>
+                <td>AppMain Inspector에 GlobalLoadingCanvas Prefab 미연결</td>
+              </tr>
+              <tr>
+                <td>점수가 서버에 안 올라감</td>
+                <td>이번 점수 ≤ 최고 점수(정상). Console <code>score not submitted</code> 확인</td>
+              </tr>
+              <tr>
+                <td>401 Unauthorized</td>
+                <td>sessionToken 만료 → 재로그인 또는 /auth/refresh</td>
+              </tr>
+              <tr>
+                <td>500 서버 오류</td>
+                <td><code>user_high_scores</code> 테이블 미생성 → migrate 실행</td>
+              </tr>
+              <tr>
+                <td>씬 전환 안 됨</td>
+                <td>Build Settings에 5개 씬 등록 확인</td>
+              </tr>
+              <tr>
+                <td>AppMain.Instance is null</td>
+                <td>App 씬이 아닌 개별 씬만 Play → App 씬부터 실행</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>향후 확장 (미구현)</h3>
+        <ul>
+          <li><code>getTopRankings()</code> — Home Rank 버튼, 상위 10명 ScrollView</li>
+          <li><code>GET /scores/rankings</code> API 노출</li>
+        </ul>
+      </section>
+
+      <footer class="footer">
+        <p>
+          관련 문서:
+          <a href="naver-auto-login-guide.html" style="color:var(--accent-hover)">Naver OAuth 자동 로그인 가이드</a> ·
+          <a href="naver-test-tools-guide.md" style="color:var(--accent-hover)">Test Tools 가이드</a> ·
+          <a href="integration-test-checklist.md" style="color:var(--accent-hover)">통합 테스트 체크리스트</a>
+        </p>
+        <p style="margin-top:8px">naver-login-project · Game Scene &amp; High Score Integration</p>
+      </footer>
+    </main>
+  </div>
+
+  <script>
+    const links = document.querySelectorAll('.nav-link');
+    const sections = document.querySelectorAll('section[id]');
+
+    function setActiveLink() {
+      let current = '';
+      sections.forEach(section => {
+        if (window.scrollY >= section.offsetTop - 80) {
+          current = section.getAttribute('id');
+        }
+      });
+      links.forEach(link => {
+        link.classList.toggle('active', link.getAttribute('href') === '#' + current);
+      });
+    }
+
+    window.addEventListener('scroll', setActiveLink);
+    setActiveLink();
+  </script>
+</body>
+</html>
