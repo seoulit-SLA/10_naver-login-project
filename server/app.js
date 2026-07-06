@@ -1,10 +1,10 @@
 const express = require('express');
 const path = require('path');
+const fs = require('fs'); // [추가] 파일 읽기를 위해 도입
 require('dotenv').config();
 const session = require('express-session');
 const passport = require('passport');
 const NaverStrategy = require('passport-naver-v2').Strategy;
-const authRoutes = require('./routes/auth');
 
 const app = express();
 const port = 3000;
@@ -76,7 +76,27 @@ app.get('/login', (req, res) => {
   res.sendFile(path.join(__dirname, 'login.html'));
 });
 
-app.use('/auth', authRoutes);
+// ======================================================================
+// [딸깍 자동 라우팅 시스템]
+// routes/ 폴더 내부 자바스크립트 파일을 읽어와 파일명 주소로 자동 연동합니다.
+// (예: routes/auth.js ➔ /auth 연동, routes/scores.js ➔ /scores 연동)
+// ======================================================================
+const routesPath = path.join(__dirname, 'routes');
+
+if (fs.existsSync(routesPath)) {
+  fs.readdirSync(routesPath).forEach(file => {
+    if (file.endsWith('.js')) {
+      const routeName = file.replace('.js', '');
+      const router = require(path.join(routesPath, file));
+      
+      app.use(`/${routeName}`, router);
+      console.log(`[Auto-Route] Mounted: /${routeName} ➔ (routes/${file})`);
+    }
+  });
+} else {
+  console.error(`[Auto-Route] 에러: routes 폴더를 찾을 수 없습니다.`);
+}
+// ======================================================================
 
 app.listen(port, () => {
   console.log(`Server is running on http://localhost:${port}`);
