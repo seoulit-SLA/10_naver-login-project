@@ -4,6 +4,7 @@ require('dotenv').config();
 const session = require('express-session');
 const passport = require('passport');
 const NaverStrategy = require('passport-naver-v2').Strategy;
+const { upsertUser } = require('./services/users');
 
 const app = express();
 const port = 3000;
@@ -87,17 +88,44 @@ app.get('/auth/naver/callback', (req, res, next) => {
     return res.status(500).json({ message: 'NAVER 환경변수가 설정되지 않았습니다.' });
   }
 
-  passport.authenticate('naver', { failureRedirect: '/login' }, (error, user) => {
+  passport.authenticate('naver', { failureRedirect: '/login' }, async (error, user) => {
     if (error || !user) {
       console.error('[NAVER] callback auth failed:', error ? error.message : 'no user');
       return res.status(401).json({ message: '네이버 로그인 실패' });
     }
 
-    console.log('[NAVER] login user', user);
-    return res.status(200).json({
-      message: '네이버 로그인 성공',
-      data: user,
-    });
+    const profile = {
+      uid: String(user.id),
+      email: user.email,
+      name: user.name,
+    };
+
+    console.log('[NAVER] user info');
+    console.log(`uid : ${profile.uid}`);
+    console.log(`email : ${profile.email}`);
+    console.log(`name : ${profile.name}`);
+
+    try {
+      const dbResult = await upsertUser(profile);
+      console.log('[NAVER] DB insert response', dbResult);
+
+      return res.status(200).json({
+        message: '네이버 로그인 성공',
+        user: profile,
+        db: {
+          insertId: dbResult.insertId,
+          affectedRows: dbResult.affectedRows,
+          savedUser: dbResult.user,
+        },
+      });
+    } catch (dbError) {
+      console.error('[NAVER] DB insert failed:', dbError.message);
+      return res.status(500).json({
+        message: '사용자 정보 DB 저장 실패',
+        user: profile,
+        error: dbError.message,
+      });
+    }
   })(req, res, next);
 });
 
