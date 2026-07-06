@@ -1,7 +1,7 @@
 [System.Serializable]
-public class GoogleUser
+public class NaverUser
 {
-    public string sub;
+    public string uid;
     public string email;
     public string name;
 }
