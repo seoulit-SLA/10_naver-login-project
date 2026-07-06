@@ -6,6 +6,7 @@ using UnityEngine.UI;
 public class Main : MonoBehaviour
 {
     public Button loginButton;
+    public Button logoutButton;
 
     private const string SessionTokenKey = "sessionToken";
     private const string LoginUrl = "http://127.0.0.1:3000/auth/naver";
@@ -28,6 +29,12 @@ public class Main : MonoBehaviour
             Debug.LogWarning("loginButton is not assigned.");
         }
 
+        if (logoutButton != null)
+        {
+            logoutButton.onClick.AddListener(Logout);
+            logoutButton.gameObject.SetActive(false);
+        }
+
         StartCoroutine(TryAutoLogin());
     }
 
@@ -36,6 +43,11 @@ public class Main : MonoBehaviour
         if (loginButton != null)
         {
             loginButton.onClick.RemoveListener(StartOAuthLogin);
+        }
+
+        if (logoutButton != null)
+        {
+            logoutButton.onClick.RemoveListener(Logout);
         }
 
         StopListener();
@@ -178,6 +190,11 @@ public class Main : MonoBehaviour
             loginButton.gameObject.SetActive(false);
         }
 
+        if (logoutButton != null)
+        {
+            logoutButton.gameObject.SetActive(true);
+        }
+
         Debug.Log($"<color=green>Login success</color>");
         Debug.Log($"uid : {user.uid}");
         Debug.Log($"email : {user.email}");
@@ -192,6 +209,30 @@ public class Main : MonoBehaviour
         {
             loginButton.gameObject.SetActive(true);
         }
+
+        if (logoutButton != null)
+        {
+            logoutButton.gameObject.SetActive(false);
+        }
+    }
+
+    public void Logout()
+    {
+        StartCoroutine(LogoutRoutine());
+    }
+
+    private IEnumerator LogoutRoutine()
+    {
+        string token = PlayerPrefs.GetString(SessionTokenKey, string.Empty);
+        if (!string.IsNullOrEmpty(token))
+        {
+            yield return NetworkManager.Instance.Logout(token, null);
+        }
+
+        PlayerPrefs.DeleteKey(SessionTokenKey);
+        PlayerPrefs.Save();
+        ShowLoginButton();
+        Debug.Log("Logged out.");
     }
 
     private void ClearSession()
