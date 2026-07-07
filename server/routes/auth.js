@@ -30,12 +30,16 @@ function buildClientCallback(query) {
 }
 
 function sendAuthError(res, statusCode, message, code) {
+  if (typeof res.apiError === 'function') {
+    return res.apiError(statusCode, code, message);
+  }
+
   return res.status(statusCode).json({ message, code });
 }
 
 router.get('/naver', (req, res, next) => {
   if (!NAVER_CLIENT_ID || !NAVER_CLIENT_SECRET) {
-    return res.status(500).json({ message: 'NAVER 환경변수가 설정되지 않았습니다.' });
+    return sendAuthError(res, 500, 'NAVER 환경변수가 설정되지 않았습니다.', 'AUTH_CONFIG_MISSING');
   }
 
   passport.authenticate('naver')(req, res, next);
@@ -43,7 +47,7 @@ router.get('/naver', (req, res, next) => {
 
 router.get('/naver/callback', (req, res, next) => {
   if (!NAVER_CLIENT_ID || !NAVER_CLIENT_SECRET) {
-    return res.status(500).json({ message: 'NAVER 환경변수가 설정되지 않았습니다.' });
+    return sendAuthError(res, 500, 'NAVER 환경변수가 설정되지 않았습니다.', 'AUTH_CONFIG_MISSING');
   }
 
   passport.authenticate('naver', { session: false }, async (error, user) => {

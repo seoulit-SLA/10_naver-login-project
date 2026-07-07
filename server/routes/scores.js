@@ -42,7 +42,7 @@ router.get('/rankings', async (req, res) => {
     return res.json({ rankings });
   } catch (err) {
     console.error('랭킹 조회 오류:', err);
-    return res.status(500).json({ code: 'SERVER_ERROR', message: 'Database error' });
+    return res.status(500).json({ code: 'SERVER_ERROR', message: '랭킹 조회 중 서버 오류가 발생했습니다.' });
   }
 });
 
@@ -58,7 +58,7 @@ router.post('/me', authenticateToken, async (req, res) => {
     });
   } catch (err) {
     console.error('최고 점수 조회 오류:', err);
-    return res.status(500).json({ code: 'SERVER_ERROR', message: 'Database error' });
+    return res.status(500).json({ code: 'SERVER_ERROR', message: '최고 점수 조회 중 서버 오류가 발생했습니다.' });
   }
 });
 
@@ -66,7 +66,7 @@ router.post('/submit', authenticateToken, async (req, res) => {
   const { score } = req.body;
 
   if (score === undefined || typeof score !== 'number' || score < 0) {
-    return res.status(400).json({ code: 'INVALID_SCORE', message: 'Score must be a positive number' });
+    return res.status(400).json({ code: 'INVALID_SCORE', message: '점수는 0 이상의 숫자여야 합니다.' });
   }
 
   try {
@@ -91,7 +91,7 @@ router.post('/submit', authenticateToken, async (req, res) => {
     });
   } catch (err) {
     console.error('점수 제출 오류:', err);
-    return res.status(500).json({ code: 'SERVER_ERROR', message: 'Database error' });
+    return res.status(500).json({ code: 'SERVER_ERROR', message: '점수 제출 중 서버 오류가 발생했습니다.' });
   }
 });
 

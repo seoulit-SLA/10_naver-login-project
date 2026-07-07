@@ -60,6 +60,10 @@ app.use((req, res, next) => {
   const startedAt = Date.now();
   console.log(`[REQ] ${req.method} ${req.originalUrl} from ${req.ip}`);
 
+  res.apiError = (statusCode, code, message) => {
+    return res.status(statusCode).json({ code, message });
+  };
+
   res.on('finish', () => {
     const duration = Date.now() - startedAt;
     console.log(`[RES] ${req.method} ${req.originalUrl} -> ${res.statusCode} (${duration}ms)`);
@@ -70,6 +74,13 @@ app.use((req, res, next) => {
 
 app.get('/', (req, res) => {
   res.send('Hello World');
+});
+
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+  });
 });
 
 app.get('/login', (req, res) => {
@@ -97,6 +108,19 @@ if (fs.existsSync(routesPath)) {
   console.error(`[Auto-Route] 에러: routes 폴더를 찾을 수 없습니다.`);
 }
 // ======================================================================
+
+app.use((err, req, res, next) => {
+  console.error('[SERVER_ERROR]', err);
+
+  if (res.headersSent) {
+    return next(err);
+  }
+
+  return res.status(500).json({
+    code: 'SERVER_ERROR',
+    message: '서버 내부 오류가 발생했습니다.',
+  });
+});
 
 app.listen(port, () => {
   console.log(`Server is running on http://localhost:${port}`);

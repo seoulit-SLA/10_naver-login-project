@@ -10,6 +10,7 @@ public class NetworkManager : MonoBehaviour
     public static NetworkManager Instance { get; private set; }
 
     private const string BaseUrl = "http://127.0.0.1:3000";
+    private const int RequestTimeoutSeconds = 5;
 
     void Awake()
     {
@@ -49,11 +50,25 @@ public class NetworkManager : MonoBehaviour
         public List<RankEntry> rankings;
     }
 
+    [Serializable]
+    public class HealthCheckResponse
+    {
+        public string status;
+        public string timestamp;
+    }
+
+    [Serializable]
+    private class ApiErrorResponse
+    {
+        public string code;
+        public string message;
+    }
+
     public IEnumerator GetRankings(int limit, Action<List<RankEntry>> onSuccess, Action<string> onError)
     {
         string url = $"{BaseUrl}/scores/rankings?limit={limit}";
         using var request = UnityWebRequest.Get(url);
-        request.downloadHandler = new DownloadHandlerBuffer();
+        ConfigureRequest(request);
         yield return request.SendWebRequest();
 
         if (request.result == UnityWebRequest.Result.Success)
@@ -72,11 +87,31 @@ public class NetworkManager : MonoBehaviour
                 Debug.LogError($"GetRankings parse failed: {ex.Message}");
             }
 
+            HandleClientSideError("PARSE_ERROR", "서버 응답을 해석할 수 없습니다.");
             onError?.Invoke("PARSE_ERROR");
             yield break;
         }
 
-        onError?.Invoke(ParseErrorCode(request.downloadHandler.text, "REQUEST_FAILED"));
+        var error = BuildErrorResponse(request, "REQUEST_FAILED", "요청 처리 중 오류가 발생했습니다.");
+        ShowSystemMessage(error);
+        onError?.Invoke(error.code);
+    }
+
+    public IEnumerator CheckServerAvailability(Action onSuccess, Action<string> onError)
+    {
+        using var request = UnityWebRequest.Get($"{BaseUrl}/health");
+        ConfigureRequest(request);
+        yield return request.SendWebRequest();
+
+        if (request.result == UnityWebRequest.Result.Success)
+        {
+            onSuccess?.Invoke();
+            yield break;
+        }
+
+        var error = BuildErrorResponse(request, "REQUEST_FAILED", "서버 상태 확인에 실패했습니다.");
+        ShowSystemMessage(error);
+        onError?.Invoke(error.code);
     }
 
     // [추가] 내 최고 점수 조회 API (POST /scores/me)
@@ -100,11 +135,14 @@ public class NetworkManager : MonoBehaviour
             {
                 Debug.LogError($"GetBestScore parse failed: {ex.Message}");
             }
+            HandleClientSideError("PARSE_ERROR", "서버 응답을 해석할 수 없습니다.");
             onError?.Invoke("PARSE_ERROR");
         }
         else
         {
-            onError?.Invoke(ParseErrorCode(request.downloadHandler.text, "REQUEST_FAILED"));
+            var error = BuildErrorResponse(request, "REQUEST_FAILED", "최고 점수 조회에 실패했습니다.");
+            ShowSystemMessage(error);
+            onError?.Invoke(error.code);
         }
     }
 
@@ -115,10 +153,7 @@ public class NetworkManager : MonoBehaviour
         using var request = new UnityWebRequest($"{BaseUrl}/scores/submit", "POST");
         byte[] bodyRaw = System.Text.Encoding.UTF8.GetBytes(jsonBody);
         request.uploadHandler = new UploadHandlerRaw(bodyRaw);
-        request.downloadHandler = new DownloadHandlerBuffer();
-        
-        request.SetRequestHeader("Authorization", $"Bearer {sessionToken}");
-        request.SetRequestHeader("Content-Type", "application/json");
+        ConfigureRequest(request, sessionToken);
 
         yield return request.SendWebRequest();
 
@@ -137,11 +172,14 @@ public class NetworkManager : MonoBehaviour
             {
                 Debug.LogError($"SubmitBestScore parse failed: {ex.Message}");
             }
+            HandleClientSideError("PARSE_ERROR", "서버 응답을 해석할 수 없습니다.");
             onError?.Invoke("PARSE_ERROR");
         }
         else
         {
-            onError?.Invoke(ParseErrorCode(request.downloadHandler.text, "REQUEST_FAILED"));
+            var error = BuildErrorResponse(request, "REQUEST_FAILED", "점수 제출에 실패했습니다.");
+            ShowSystemMessage(error);
+            onError?.Invoke(error.code);
         }
     }
 
@@ -172,17 +210,27 @@ public class NetworkManager : MonoBehaviour
                 Debug.LogError($"Refresh response parse failed: {ex.Message}");
             }
 
+            HandleClientSideError("REAUTH_REQUIRED", "세션 갱신 응답을 해석할 수 없습니다.");
             onError?.Invoke("REAUTH_REQUIRED");
             yield break;
         }
 
-        onError?.Invoke(ParseErrorCode(request.downloadHandler.text, "REAUTH_REQUIRED"));
+        var error = BuildErrorResponse(request, "REAUTH_REQUIRED", "세션 갱신에 실패했습니다.");
+        ShowSystemMessage(error);
+        onError?.Invoke(error.code);
     }
 
     public IEnumerator Logout(string sessionToken, Action onComplete)
     {
         using var request = CreateAuthRequest($"{BaseUrl}/auth/logout", "POST", sessionToken);
         yield return request.SendWebRequest();
+
+        if (request.result != UnityWebRequest.Result.Success)
+        {
+            var error = BuildErrorResponse(request, "REQUEST_FAILED", "로그아웃 요청에 실패했습니다.");
+            ShowSystemMessage(error);
+        }
+
         onComplete?.Invoke();
     }
 
@@ -207,37 +255,98 @@ public class NetworkManager : MonoBehaviour
                 Debug.LogError($"Auth response parse failed: {ex.Message}");
             }
 
+            HandleClientSideError("SESSION_INVALID", "서버 응답을 해석할 수 없습니다.");
             onError?.Invoke("SESSION_INVALID");
             yield break;
         }
 
-        onError?.Invoke(ParseErrorCode(request.downloadHandler.text, "SESSION_INVALID"));
+        var error = BuildErrorResponse(request, "SESSION_INVALID", "인증 요청에 실패했습니다.");
+        ShowSystemMessage(error);
+        onError?.Invoke(error.code);
     }
 
     private static UnityWebRequest CreateAuthRequest(string url, string method, string sessionToken)
     {
         var request = new UnityWebRequest(url, method);
-        request.downloadHandler = new DownloadHandlerBuffer();
-        request.SetRequestHeader("Authorization", $"Bearer {sessionToken}");
-        request.SetRequestHeader("Content-Type", "application/json");
+        ConfigureRequest(request, sessionToken);
         return request;
     }
 
-    private static string ParseErrorCode(string responseText, string fallback)
+    private static void ConfigureRequest(UnityWebRequest request, string sessionToken = null)
     {
+        request.timeout = RequestTimeoutSeconds;
+        request.downloadHandler = new DownloadHandlerBuffer();
+        request.SetRequestHeader("Content-Type", "application/json");
+
+        if (!string.IsNullOrEmpty(sessionToken))
+        {
+            request.SetRequestHeader("Authorization", $"Bearer {sessionToken}");
+        }
+    }
+
+    private static ApiErrorResponse BuildErrorResponse(UnityWebRequest request, string fallbackCode, string fallbackMessage)
+    {
+        if (request.result == UnityWebRequest.Result.ConnectionError)
+        {
+            if (request.error != null && request.error.IndexOf("timed out", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return new ApiErrorResponse
+                {
+                    code = "REQUEST_TIMEOUT",
+                    message = $"서버 응답이 5초를 초과했습니다. 잠시 후 다시 시도해 주세요.",
+                };
+            }
+
+            return new ApiErrorResponse
+            {
+                code = "NETWORK_ERROR",
+                message = "서버에 연결할 수 없습니다. 서버 실행 상태를 확인해 주세요.",
+            };
+        }
+
         try
         {
-            var error = JsonConvert.DeserializeObject<AuthErrorResponse>(responseText);
+            var error = JsonConvert.DeserializeObject<ApiErrorResponse>(request.downloadHandler.text);
             if (error != null && !string.IsNullOrEmpty(error.code))
             {
-                return error.code;
+                if (string.IsNullOrEmpty(error.message))
+                {
+                    error.message = fallbackMessage;
+                }
+
+                return error;
             }
         }
         catch (JsonException)
         {
         }
 
-        return fallback;
+        return new ApiErrorResponse
+        {
+            code = fallbackCode,
+            message = fallbackMessage,
+        };
+    }
+
+    private static void HandleClientSideError(string code, string message)
+    {
+        ShowSystemMessage(new ApiErrorResponse
+        {
+            code = code,
+            message = message,
+        });
+    }
+
+    private static void ShowSystemMessage(ApiErrorResponse error)
+    {
+        if (AppMain.Instance != null)
+        {
+            AppMain.Instance.ShowSystemMessage($"[{error.code}] {error.message}");
+            return;
+        }
+
+        var popup = UISystemMessage.EnsureExists();
+        popup?.ShowMessage($"[{error.code}] {error.message}");
     }
 
     [Serializable]
@@ -249,10 +358,4 @@ public class NetworkManager : MonoBehaviour
         public string name;
     }
 
-    [Serializable]
-    private class AuthErrorResponse
-    {
-        public string message;
-        public string code;
-    }
 }

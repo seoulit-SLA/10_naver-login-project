@@ -108,11 +108,25 @@ public class LoginManager : MonoBehaviour
     {
         if (loginButton != null)
         {
-            loginButton.gameObject.SetActive(false);
+            loginButton.interactable = false;
         }
 
-        StartListener();
-        Application.OpenURL(LoginUrl);
+        StartCoroutine(BeginOAuthLoginRoutine());
+    }
+
+    private IEnumerator BeginOAuthLoginRoutine()
+    {
+        yield return NetworkManager.Instance.CheckServerAvailability(
+            () =>
+            {
+                StartListener();
+                Application.OpenURL(LoginUrl);
+            },
+            _ =>
+            {
+                ShowLoginButton();
+            }
+        );
     }
 
     private void StartListener()
@@ -168,6 +182,7 @@ public class LoginManager : MonoBehaviour
             _pendingError = null;
 
             Debug.LogError($"Login failed: {error}");
+            UISystemMessage.EnsureExists()?.ShowMessage(GetCallbackErrorMessage(error));
             StopListener();
             ShowLoginButton();
         }
@@ -219,6 +234,7 @@ public class LoginManager : MonoBehaviour
         if (loginButton != null)
         {
             loginButton.gameObject.SetActive(true);
+            loginButton.interactable = true;
         }
 
         if (logoutButton != null)
@@ -297,5 +313,15 @@ public class LoginManager : MonoBehaviour
         }
 
         return null;
+    }
+
+    private static string GetCallbackErrorMessage(string error)
+    {
+        return error switch
+        {
+            "auth_failed" => "[AUTH_FAILED] 네이버 로그인에 실패했습니다. 다시 시도해 주세요.",
+            "db_failed" => "[DB_ERROR] 로그인 정보 저장 중 오류가 발생했습니다.",
+            _ => $"[LOGIN_ERROR] 로그인 처리 중 오류가 발생했습니다. ({error})",
+        };
     }
 }
