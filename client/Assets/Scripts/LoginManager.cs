@@ -209,7 +209,7 @@ public class LoginManager : MonoBehaviour
         // [수정] 로그인 성공 시 메인 로비(HomeScene)로 화면을 전환합니다.
         // 자동 로그인 처리가 완료되었을 때도 이 함수를 거쳐 자동으로 이동하게 됩니다.
         // ==========================================
-        SceneManager.LoadScene("HomeScene");
+        SceneManager.LoadScene("RankingScene");
     }
 
     private void ShowLoginButton()

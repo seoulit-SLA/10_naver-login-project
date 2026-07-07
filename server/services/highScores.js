@@ -39,7 +39,42 @@ async function submitScore(uid, score) {
     }
 }
 
+async function getRankings(limit = 100) {
+    let conn;
+    try {
+        conn = await getConnection();
+        const safeLimit = Math.min(Math.max(Number(limit) || 100, 1), 100);
+        const [rows] = await conn.query(
+            `
+            SELECT
+              h.uid,
+              COALESCE(u.name, h.uid) AS name,
+              h.best_score AS score,
+              h.updated_at AS time
+            FROM user_high_scores h
+            LEFT JOIN users u ON u.uid = h.uid
+            ORDER BY h.best_score DESC, h.updated_at ASC
+            LIMIT ?
+            `,
+            [safeLimit]
+        );
+
+        return rows.map((row, index) => ({
+            rank: index + 1,
+            uid: row.uid,
+            name: row.name,
+            score: row.score,
+            time: row.time ? new Date(row.time).toISOString() : null,
+        }));
+    } finally {
+        if (conn) {
+            await conn.end();
+        }
+    }
+}
+
 module.exports = {
     getBestScore,
-    submitScore
+    submitScore,
+    getRankings,
 };

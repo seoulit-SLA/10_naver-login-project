@@ -34,6 +34,6 @@ public class GameOverManager : MonoBehaviour
 
     public void OnHomeButtonClick()
     {
-        SceneManager.LoadScene("HomeScene");
+        SceneManager.LoadScene("RankingScene");
     }
 }

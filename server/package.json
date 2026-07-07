@@ -11,6 +11,8 @@
     "delete:user": "node delete-user.js",
     "insert:user": "node insert-user.js",
     "test:db": "node test-db.js",
+    "migrate:high-scores": "node migrate-high-scores.js",
+    "seed:ranking-mock": "node seed-ranking-mock.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

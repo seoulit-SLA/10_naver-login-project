@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using Newtonsoft.Json;
 using UnityEngine;
 using UnityEngine.Networking;
@@ -40,6 +41,42 @@ public class NetworkManager : MonoBehaviour
         public int previousBestScore;
         public bool isNewRecord;
         public string updatedAt;
+    }
+
+    [Serializable]
+    public class RankingsResponse
+    {
+        public List<RankEntry> rankings;
+    }
+
+    public IEnumerator GetRankings(int limit, Action<List<RankEntry>> onSuccess, Action<string> onError)
+    {
+        string url = $"{BaseUrl}/scores/rankings?limit={limit}";
+        using var request = UnityWebRequest.Get(url);
+        request.downloadHandler = new DownloadHandlerBuffer();
+        yield return request.SendWebRequest();
+
+        if (request.result == UnityWebRequest.Result.Success)
+        {
+            try
+            {
+                var response = JsonConvert.DeserializeObject<RankingsResponse>(request.downloadHandler.text);
+                if (response?.rankings != null)
+                {
+                    onSuccess?.Invoke(response.rankings);
+                    yield break;
+                }
+            }
+            catch (JsonException ex)
+            {
+                Debug.LogError($"GetRankings parse failed: {ex.Message}");
+            }
+
+            onError?.Invoke("PARSE_ERROR");
+            yield break;
+        }
+
+        onError?.Invoke(ParseErrorCode(request.downloadHandler.text, "REQUEST_FAILED"));
     }
 
     // [추가] 내 최고 점수 조회 API (POST /scores/me)
