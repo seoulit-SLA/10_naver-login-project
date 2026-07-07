@@ -6,6 +6,7 @@
 # Node.js
 node_modules/
 npm-debug.log*
+test-server/
 
 # Unity generated
 [Ll]ibrary/
